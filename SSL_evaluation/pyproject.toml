@@ -1,0 +1,42 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # ignore "line too long" because formatting handles it
+
+[tool.pylint.basic]
+# Allow your module/function naming style (if you don't want to rename the file)
+module-naming-style = "any"
+function-naming-style = "any"
+variable-naming-style = "snake_case"
+attr-naming-style = "any"
+const-naming-style = "any"
+
+
+[tool.ruff.format]
+# formatter will wrap where it can; it won't aggressively break long strings
+quote-style = "double"
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.messages_control]
+# keep pylint focused; ruff covers lots of style/unused stuff already
+disable = [
+  "C0114","C0115","C0116",  # missing docstrings
+  "R0903",                  # too-few-public-methods
+  "R0913",                  # too-many-arguments
+  "W0511",                  # TODO/FIXME
+  "E0601",
+  "R0902",  # too-many-instance-attributes
+  "R0912",  # too-many-branches
+  "R0914",  # too-many-locals
+  "R0915",  # too-many-statements
+  "R0917",  # too-many-positional-arguments
+  "C0200",  # consider-using-enumerate
+  "W0621",  # redefined-outer-name
+  "W0105",  # pointless-string-statement
+  "R1732",  # consider-using-with
+]
