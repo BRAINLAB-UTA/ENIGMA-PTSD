@@ -22,7 +22,7 @@
 <h2  align="center"> 3D/4D parcellated image generation </h2>
   
 <p align="center">
-   Codes for pre-processing, dataloader creating, and Self-Supervised Learning evaluation over current ENIGMA-PTSD dataset. For accessing ENIGMA-PTSD data please contact contact <a href="mailto:xi.zhu@uta.edu" target="_blank" rel="noopener noreferrer"> <b>Dr. Xi Zhu<b></a>.
+   Codes for pre-processing, dataloader creating, and Self-Supervised Learning evaluation over current ENIGMA-PTSD dataset. For accessing ENIGMA-PTSD data please contact contact <a href="mailto:xi.zhu@uta.edu" target="_blank" rel="noopener noreferrer"> <b>Dr. Xi Zhu</b></a>.
 </p>
 
 This repository contains:
@@ -31,3 +31,15 @@ This repository contains:
   - fALFF/ReHo (rs-fMRI-derived)
   - RSData (resting-state 4D time-series–derived)
 - **Dataloader creation utilities** for downstream SSL evaluation/training in this [folder](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/SSL_evaluation).
+
+For start running the preprocessing and DataLoader creation follow the next steps in sequence:
+
+## Quick start (environment)
+
+### 1) Clone
+```bash
+git clone https://github.com/BRAINLAB-UTA/ENIGMA-PTSD.git
+cd ENIGMA-PTSD
+```
+
+### 2) Create Python environment (Python version >= 3.11)
