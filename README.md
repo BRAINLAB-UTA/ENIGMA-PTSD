@@ -19,7 +19,7 @@
 </table>
 
 <h1 align="center">ENIGMA-PTSD</h1>
-<h2  align="center"> 3D/4D parcellated image generation 
+<h2  align="center"> 3D/4D parcellated image generation </h2>
   
 <p align="center">
    Codes for pre-processing, dataloader creating, and Self-Supervised Learning evaluation over current ENIGMA-PTSD dataset. For accessing ENIGMA-PTSD data please reach professor Xi Zhu, PhD in this [email](xi.zhu@uta.edu).
