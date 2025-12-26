@@ -136,12 +136,12 @@ source fsl_load.sh
 Now you can inspect the quality of your data using **fsleyes** following this bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo.
 
 ```bash
-fsleyes ../../AMC/sub-1153/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1153/sub-1153_schaefer_4d_image.nii.gz ../../AMC/sub-1153/sub-1153_schaefer_mni_image.nii.gz ../../AMC/sub-1153/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1153/1153_Destrieux_thick_struct3D.nii.gz
+fsleyes ../../AMC/sub-1132/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1153_schaefer_4d_image.nii.gz ../../AMC/sub-1132/sub-1153_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1153_Destrieux_thick_struct3D.nii.gz
 ```
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="" target="_blank" rel="noopener noreferrer">
-        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1000" width="1500">
+        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1200" width="1500">
       </a>
 </td>
 
