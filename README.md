@@ -89,11 +89,30 @@ This does not follow a standard BIDS format. Having different annotation per sit
 
 To create the 3D structural images on the **Destrieux** and **Desikan-Killiany-Tourville (DKT)** atlases run the follow Python command in the [**preprocessing**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing) folder
 
-```Python
+```python
 python create_parcellation_structural.py
 ```
 This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and per site.
 
-This can take a couple of minutes. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
+This command an take a couple of minutes, so be patient depending on the power of your CPU processing. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
+
+#### Resting state 4D images
+
+For generating projected 4D images from **Schaefer** and **Brainnetome** nii.gz images with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 for X, Y, Z voxel dimensions
+
+```python
+python create_parcellation_images_mni.py
+```
+
+For creating alternative 4D images with **decimated factor** as an integer that resample the images on X, Y, Z voxels dimension you must run the following command 
+
+```python
+python create_parcellation_images_mni_smaller_resample.py <decimation_factor>
+```
+
+This code will generate the interim projected or projected/resampled images in the 
 
 ## ALFF/fALFF/ReHO
+
+This images are already derived from the **aCompCorOnly** folder there are not need to be processed before running the dataloader.
+
