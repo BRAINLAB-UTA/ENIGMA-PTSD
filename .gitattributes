@@ -1,0 +1,6 @@
+# generated / build artifacts
+dist/**  linguist-generated=true
+build/** linguist-generated=true
+
+# or hide HTML entirely from stats
+*.html linguist-detectable=false
