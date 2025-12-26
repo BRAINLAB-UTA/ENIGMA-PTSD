@@ -226,7 +226,7 @@ for tag, excel_path in excel_files.items():
 
     measure = tag.split("_")[1]  # surf / thick / vol
 
-    if measure == "surf":
+    if measure == "vol":
         # run the structural representation here..
         run_structural_parcellation(
             excel_path=excel_path,

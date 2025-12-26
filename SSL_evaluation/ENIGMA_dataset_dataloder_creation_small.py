@@ -410,7 +410,7 @@ class StreamPairs(Dataset):
             + self.subject_sites["subjects_rs"][idx]
             + "/"
             + self.subject_sites["subjects_rs"][idx]
-            + "_brainnetome_4d_mni_image.nii.gz"
+            + "_brainnetome_4d_mni_image_small.nii.gz"
         )
         rs_data_path_2 = (
             self.rs_path
@@ -420,7 +420,7 @@ class StreamPairs(Dataset):
             + self.subject_sites["subjects_st"][idx]
             + "/"
             + self.subject_sites["subjects_st"][idx]
-            + "_brainnetome_4d_mni_image.nii.gz"
+            + "_brainnetome_4d_mni_image_small.nii.gz"
         )
 
         # do the validation in the first part
@@ -475,7 +475,7 @@ class StreamPairs(Dataset):
                 + subject_rs_path_1
                 + "/"
                 + subject_rs_path_1
-                + "_brainnetome_4d_mni_image.nii.gz"
+                + "_brainnetome_4d_mni_image_small.nii.gz"
             )
             rs_data_path_2 = (
                 self.rs_path
@@ -485,7 +485,7 @@ class StreamPairs(Dataset):
                 + subject_rs_path_2
                 + "/"
                 + subject_rs_path_2
-                + "_brainnetome_4d_mni_image.nii.gz"
+                + "_brainnetome_4d_mni_image_small.nii.gz"
             )
         elif self.sites_all[idx] in self.special_sites_1:
             subject_rs_path_1 = self.falff_subjects[index_site][subject_index_rs]
@@ -499,7 +499,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1
                     + "/"
                     + subject_rs_path_1.replace("M", "m").replace("O", "o")
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
             elif self.sites_all[idx] == "NanjingYixing":
                 rs_data_path_1 = (
@@ -521,7 +521,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1
                     + "/"
                     + subject_rs_path_1.lower()
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
             rs_data_path_2 = (
                 self.rs_path
@@ -531,7 +531,7 @@ class StreamPairs(Dataset):
                 + subject_rs_path_2
                 + "/"
                 + subject_rs_path_2.lower()
-                + "_brainnetome_4d_mni_image.nii.gz"
+                + "_brainnetome_4d_mni_image_small.nii.gz"
             )
         elif self.sites_all[idx] in self.special_sites_2:
             # validates if subject_index_st exists
@@ -549,7 +549,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1.replace("DOP", "DOP_").replace("PAL", "PAL_")
                     + "/"
                     + subject_rs_path_1.replace("DO", "dO").replace("PA", "pA")
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
             elif self.sites_all[idx] == "Capetown":
                 rs_data_path_11 = (
@@ -570,7 +570,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1.replace("sub-", "sub-tygerberg-")
                     + "/"
                     + subject_rs_path_1
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
                 if os.path.exists(rs_data_path_11):
                     rs_data_path_1 = rs_data_path_11
@@ -587,7 +587,7 @@ class StreamPairs(Dataset):
                     + "/"
                     + subject_rs_path_1[0:4]
                     + f"{int(subject_rs_path_1[4:]) + 880:03d}"
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
             else:
                 rs_data_path_1 = (
@@ -598,7 +598,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1
                     + "/"
                     + subject_rs_path_1
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
             subject_rs_path_2 = self.subject_sites["subjects_st"][idx]
             rs_data_path_2 = (
@@ -609,7 +609,7 @@ class StreamPairs(Dataset):
                 + subject_rs_path_2
                 + "/"
                 + subject_rs_path_2
-                + "_brainnetome_4d_mni_image.nii.gz"
+                + "_brainnetome_4d_mni_image_small.nii.gz"
             )
 
         # evaluate the existence of rs_data_path

@@ -30,19 +30,27 @@ from torch.utils.data import DataLoader, Dataset
 # define this to skip unexistent data
 from torch.utils.data.dataloader import default_collate
 
+# set a new renice here
+try:
+    # negative = higher priority (usually requires sudo)
+    os.nice(-20)
+except PermissionError as e:
+    logger.error("No permission to raise priority (need sudo/capabilities).", e)
+
+# set the OS environment here for renicing**
+os.sched_setaffinity(0, set(range(0, 23)))
+os.environ["OMP_NUM_THREADS"] = "24"
+os.environ["MKL_NUM_THREADS"] = "24"
+os.environ["OPENBLAS_NUM_THREADS"] = "24"
+os.environ["NUMEXPR_NUM_THREADS"] = "24"
+
+# set the cudas here
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+
 # To ignore all warnings:
 warnings.filterwarnings("ignore")
 # To ignore specific categories of warnings (e.g., DeprecationWarning):
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-# set the plt fontsizes
-plt.rc('font', size=16)          # Controls default text sizes (axes, ticks, legend, etc.)
-plt.rc('axes', titlesize=17)     # Font size of the axes title
-plt.rc('axes', labelsize=15)     # Font size of the x and y axis labels
-plt.rc('xtick', labelsize=14)    # Font size of the x-axis tick labels
-plt.rc('ytick', labelsize=14)    # Font size of the y-axis tick labels
-plt.rc('legend', fontsize=14)    # Font size of the legend
-plt.rc('figure', titlesize=17)   # Font size of the figure title
 
 FMT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -58,14 +66,14 @@ logger.add("report_final_excluded_subjects.log", format=FMT, colorize=True)
 
 
 # define here the paths for reading the data coming for each subject and site
-RSdata_folder = "../../Data/RSData/"
-npz_folder = "../../Data/npz"
-npy_folder = "../../Data/npy"
+RSdata_folder = "../../../Data/RSData/"
+npz_folder = "../../../Data/npz"
+npy_folder = "../../../Data/npy"
 
 structural_npz_folder = f"{npz_folder}/structural"
 falff_reho_npz_folder = f"{npz_folder}/falff_reho_3d"
 
-subject_indices_current_data = "../../Data/npz/subjects_overlaped_all_modalities.npz"
+subject_indices_current_data = "../../../Data/npz/subjects_overlaped_all_modalities.npz"
 
 DATA_structural = []
 DATA_falff_reho = []
@@ -101,7 +109,7 @@ def plot_histogram(data, x_string: str, y_string: str, bins: int, counts_show: b
       None
         The plot is saved to disk; nothing is returned.
     """
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(10, 8))
 
     if counts_show is True:
         counts, bin_edges, _ = ax.hist(data, bins=bins, density=False, alpha=0.6, edgecolor="black")
@@ -121,11 +129,13 @@ def plot_histogram(data, x_string: str, y_string: str, bins: int, counts_show: b
        ax.plot(xx, normal_counts, linewidth=2, label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
     else:
        ax.plot(xx, normal_pdf, linewidth=2, label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+
     ax.grid()
     ax.set_xlabel(x_string)
     ax.set_ylabel(y_string)
     # ax.set_title(title)
     fig.tight_layout()
+
     if counts_show is True:
        fig.savefig(f"./histogram_{x_string}_counts.jpg")
     else:
@@ -209,7 +219,7 @@ class StreamPairs(Dataset):
         """
 
         # read here the TR_vals
-        with open("../../Data/npz/TR_vals.pkl", "rb") as file_TRs:
+        with open("../../../Data/npz/TR_vals.pkl", "rb") as file_TRs:
             self.tr_vals = pickle.load(file_TRs)
 
         # define here the initialization parameters
@@ -241,8 +251,8 @@ class StreamPairs(Dataset):
         self.sites_all = self.subject_sites["sites_all"]
 
         if not os.path.exists(
-            "../../Data/npy/structural_npys_all.npy"
-        ) and not os.path.exists("../../Data/npy/falff_reho_npys_all.npy"):
+            "../../../Data/npy/structural_npys_all.npy"
+        ) and not os.path.exists("../../../Data/npy/falff_reho_npys_all.npy"):
             # read the files as list and save it as npys if necessary
             logger.info("Reading structural Data for all sites!!")
 
@@ -276,12 +286,12 @@ class StreamPairs(Dataset):
             # saving the st variables firt to do the del afterwards
             self.st_DATA = np.array(self.st_DATA, dtype=object)  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/structural_npys_all.npy",
+                "../../../Data/npy/structural_npys_all.npy",
                 self.st_DATA,
                 allow_pickle=True,
             )
             # write the pickle directory here
-            with open("../../Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
+            with open("../../../Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
                 pickle.dump(self.st_subjects, file_structural)
 
             # delete this temporary values to save RAM memory and keep speed
@@ -334,13 +344,13 @@ class StreamPairs(Dataset):
                 self.falff_reho_DATA, dtype=object
             )  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/falff_reho_npys_all.npy",
+                "../../../Data/npy/falff_reho_npys_all.npy",
                 self.falff_reho_DATA,
                 allow_pickle=True,
             )
 
             # write the pickle directory here
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
+            with open("../../../Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
                 pickle.dump(self.falff_subjects, file_falff)
 
             del self.falff_reho_data_site, self.falff_reho_DATA
@@ -350,18 +360,18 @@ class StreamPairs(Dataset):
             # measure how it takes reading the files
             logger.info("Reading pre-saved dataset!!")
             self.falff_reho_DATA = np.load(
-                "../../Data/npy/falff_reho_npys_all.npy", allow_pickle=True
+                "../../../Data/npy/falff_reho_npys_all.npy", allow_pickle=True
             )
             self.st_DATA = np.load(
-                "../../Data/npy/structural_npys_all.npy", allow_pickle=True
+                "../../../Data/npy/structural_npys_all.npy", allow_pickle=True
             )
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
+            with open("../../../Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
                 self.falff_subjects = pickle.load(file_alff)
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
+            with open("../../../Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
                 self.st_subjects = pickle.load(file_structural)
 
             logger.info("Reading finalized!!")
@@ -625,9 +635,7 @@ class StreamPairs(Dataset):
             return None
 
         logger.info(
-            f"Read RSdata from site {self.sites_all[idx]} subject {
-                self.subject_sites['subjects_rs'][idx]
-            } with RSData path {rs_data_path_1} or {rs_data_path_2}"
+            f"Read RSdata from site {self.sites_all[idx]} subject {self.subject_sites['subjects_rs'][idx]} with RSData path {rs_data_path_1} or {rs_data_path_2}"
         )
 
         # resample the index vector first
@@ -732,9 +740,7 @@ class StreamPairs(Dataset):
         ]
 
         logger.info(
-            f"RS index {subject_index_rs} and ST index {subject_index_st}, for subject {
-                self.falff_subjects[index_site][subject_index_rs]
-            } in rs, and subject {self.st_subjects[index_site][subject_index_st]} in st"
+            f"RS index {subject_index_rs} and ST index {subject_index_st}, for subject {self.falff_subjects[index_site][subject_index_rs]} in rs, and subject {self.st_subjects[index_site][subject_index_st]} in st"
         )
 
         # return the tuple with the values corresponding with the same subject
@@ -828,7 +834,8 @@ time_sub_values_np = np.asarray(time_sub_values)
 tr_values = [str(s) for sublist in tr_values for s in sublist]
 tr_values = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group()) for s in tr_values],dtype=np.float32)
 
-time_sub_values_np = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group()) for s in time_sub_values_np],dtype=np.float32)
+
+time_sub_values_np = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group()) for s in time_sub_values_np],dtype=np.float64)
 sites_flat = [str(s) for sublist in sites_sample for s in sublist]
 sites_unique = list(dict.fromkeys(sites_flat))
 
