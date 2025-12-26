@@ -60,3 +60,14 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+### 3) Data generation (structural, fALFF/ReHo, RSData)
+
+Here we describe the intended flow for producing the derived files needed by the dataloader.
+
+You generally need (per subject) on each modality folder:
+   - T1w anatomical image 3D NIfTI .nii.gz in the folder **Structural**
+   - Resting-state fMRI (4D NIfTI) + metadata TR, etc written in .json files in the folder **RSData**
+   - ALFF/fALFF/ReHO 3D images in the folder **falffReHO**
+   - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet**
+
+   - 
