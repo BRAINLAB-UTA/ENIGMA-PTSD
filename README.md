@@ -67,7 +67,7 @@ Here we describe the intended flow for producing the derived files needed by the
 You generally need (per subject) on each modality folder:
    - T1w anatomical image 3D NIfTI .nii.gz in the folder **Structural**
    - Resting-state fMRI (4D NIfTI) + metadata TR, etc written in .json files in the folder **RSData**
-   - ALFF/fALFF/ReHO 3D images in the folder **falffReHO**
+   - ALFF/fALFF/ReHO 3D images in the folder **falffReHo**
    - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet**
 
 The structure of each folder modality will be like this:
@@ -84,3 +84,13 @@ The structure of each folder modality will be like this:
       ...
 ```
 This does not follow a standard BIDS format. Having different annotation per site and modality this code can handle.
+
+#### Structural Images
+
+To create the 3D structural images on the Destrieux and Desikan-Killiany-Tourville (DKT) atlases run the follow Python command 
+
+```Python
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
