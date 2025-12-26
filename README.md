@@ -70,4 +70,17 @@ You generally need (per subject) on each modality folder:
    - ALFF/fALFF/ReHO 3D images in the folder **falffReHO**
    - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet**
 
-   - 
+The structure of each folder modality will be like this:
+
+```text
+/DATA_Modality/
+  siteA/
+    sub-XXXX/
+        T1w.nii.gz
+        rest.nii.gz
+        falff_reho.nii.gz
+  siteB/
+    sub-YYYY/
+      ...
+```
+This does not follow a standard BIDS format. Having different annotation per site and modality this code can handle.
