@@ -92,7 +92,7 @@ To create the 3D structural images on the **Destrieux** and **Desikan-Killiany-T
 ```python
 python create_parcellation_structural.py
 ```
-This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and per site.
+This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and site.
 
 This command an take a couple of minutes, so be patient depending on the power of your CPU processing. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
 
@@ -110,7 +110,7 @@ For creating alternative 4D images with **decimated factor** as an integer that 
 python create_parcellation_images_mni_smaller_resample.py <decimation_factor>
 ```
 
-This code will generate the interim projected or projected/resampled images in the 
+This code will generate the interim projected or projected/resampled images in the RSData folder with the corresponding Atlas suffix, such as, **schaefer** and **brainnetome** per subject and site. 
 
 ## ALFF/fALFF/ReHO
 
