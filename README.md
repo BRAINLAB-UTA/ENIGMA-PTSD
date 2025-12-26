@@ -128,9 +128,19 @@ For installing **FSL** download the [**fslinstaller.py**](https://fsl.fmrib.ox.a
 python fslinstaller.py
 ```
 
-Now load the bin folder in your bashrc system using the .sh code here and running this. First locate where your **FSL** files are located in your local machine and modify the bash file with the right path.
+Now load the bin folder in your bashrc system using the .sh code [here](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/fsl_load.sh) and running this. First locate where your **FSL** files are located in your local machine and modify the bash file with the right path.
 
 ```python
-source fslinstaller.py
+source fsl_load.sh
+```
+Now you can inspect the quality of your data using **fsleyes** following this bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo.
+
+```bash
+fsleyes ../../AMC/sub-1153/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1153/sub-1153_schaefer_4d_image.nii.gz ../../AMC/sub-1153/sub-1153_schaefer_mni_image.nii.gz ../../AMC/sub-1153/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1153/1153_Destrieux_thick_struct3D.nii.gz
 ```
 
+<td align="center" style="border: none; padding-right:24px;">
+      <a href="" target="_blank" rel="noopener noreferrer">
+        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="100">
+      </a>
+</td>
