@@ -87,10 +87,13 @@ This does not follow a standard BIDS format. Having different annotation per sit
 
 #### Structural Images
 
-To create the 3D structural images on the Destrieux and Desikan-Killiany-Tourville (DKT) atlases run the follow Python command 
+To create the 3D structural images on the **Destrieux** and **Desikan-Killiany-Tourville (DKT)** atlases run the follow Python command in the [**preprocessing**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing) folder
 
 ```Python
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python create_parcellation_structural.py
 ```
+This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and per site.
+
+This can take a couple of minutes. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
+
+## ALFF/fALFF/ReHO
