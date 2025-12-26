@@ -141,6 +141,8 @@ fsleyes ../../AMC/sub-1153/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="" target="_blank" rel="noopener noreferrer">
-        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="500" width="600">
+        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1000" width="1500">
       </a>
 </td>
+
+Check the timeseries plots and the aligment of the different ROIs on each image to be sure the code is working as you expect.
