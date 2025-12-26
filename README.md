@@ -18,5 +18,15 @@
   </tr>
 </table>
 
-# ENIGMA-PTSD
-Codes for pre-processing, dataloader creating, and Self-Supervised Learning evaluation over current ENIGMA-PTSD dataset
+<h1 align="center">ENIGMA-PTSD</h1>
+
+<p align="center">
+   Codes for pre-processing, dataloader creating, and Self-Supervised Learning evaluation over current ENIGMA-PTSD dataset
+</p>
+
+This repository contains:
+- **Preprocessing pipelines** to generate in this [folder](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing):
+  - structural features (sMRI-derived)
+  - fALFF/ReHo (rs-fMRI-derived)
+  - RSData (resting-state 4D time-series–derived)
+- **Dataloader creation utilities** for downstream SSL evaluation/training in this [folder](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/SSL_evaluation).
