@@ -43,3 +43,20 @@ cd ENIGMA-PTSD
 ```
 
 ### 2) Create Python environment (Python version >= 3.11)
+
+Please install **pip** before anything
+
+Using **Conda**
+
+```bash
+conda create -n enigma-ptsd python=3.10 -y
+conda activate enigma-ptsd
+pip install -r requirements.txt
+```
+
+Using **venv**
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
