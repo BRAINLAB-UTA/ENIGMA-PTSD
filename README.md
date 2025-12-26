@@ -112,7 +112,19 @@ python create_parcellation_images_mni_smaller_resample.py <decimation_factor>
 
 This code will generate the interim projected or projected/resampled images in the RSData folder with the corresponding Atlas suffix, such as, **schaefer** and **brainnetome** per subject and site. 
 
-## ALFF/fALFF/ReHO
+#### ALFF/fALFF/ReHO
 
-This images are already derived from the **aCompCorOnly** folder there are not need to be processed before running the dataloader.
+This images are already derived from the **aCompcorOnly** folder there are not need to be processed before running the dataloader.
+
+#### Visualization after image projection
+
+For doing a visual QC process after the images are generated per site and subject
+
+First install **FSL** following the steps in the officinal website [https://fsl.fmrib.ox.ac.uk/fsl/docs/install/](https://fsl.fmrib.ox.ac.uk/fsl/docs/install/).
+
+For installing **FSL** download the [**fslinstaller.py**](https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/fslinstaller.py) file run this commands and set up a folder in your local machine to get the bin files.
+
+```python
+python fslinstaller.py
+```
 
