@@ -128,3 +128,9 @@ For installing **FSL** download the [**fslinstaller.py**](https://fsl.fmrib.ox.a
 python fslinstaller.py
 ```
 
+Now load the bin folder in your bashrc system using the .sh code here and running this. First locate where your **FSL** files are located in your local machine and modify the bash file with the right path.
+
+```python
+source fslinstaller.py
+```
+
