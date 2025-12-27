@@ -147,4 +147,4 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
 
 Check the timeseries plots and the aligment of the different ROIs on each image to be sure the code is working as you expect.
 
-After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites ['Duke', 'Muenster', 'WacoVA', 'Capetown', 'AMC', 'Lawson', 'Vanderbilt', 'Ghent', 'MinnVA', 'Milwaukee', 'Emory', 'Masaryk', 'Beijing', 'UWash', 'Grupe', 'McLean', 'NanjingYixing', 'Tours', 'Toledo', 'Groningen']
+After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites [**'Duke', 'Muenster', 'WacoVA', 'Capetown', 'AMC', 'Lawson', 'Vanderbilt', 'Ghent', 'MinnVA', 'Milwaukee', 'Emory', 'Masaryk', 'Beijing', 'UWash', 'Grupe', 'McLean', 'NanjingYixing', 'Tours', 'Toledo', 'Groningen'**]
