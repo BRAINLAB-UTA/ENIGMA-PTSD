@@ -133,7 +133,7 @@ Now load the bin folder in your bashrc system using the .sh code [here](https://
 ```python
 source fsl_load.sh
 ```
-Now you can inspect the quality of your data using **fsleyes** based on the following bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo. The paths in the example are for site AMC
+Now you can inspect the quality of your data using **fsleyes** based on the following bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo. The paths in the example are for site AMC. In fsleyes change the opacity of the 4D images to 0.5, and change the 3D images parcellation colormap from grayscale to **HSV**.
 
 ```bash
 fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_4d_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1132_Destrieux_thick_struct3D.nii.gz
