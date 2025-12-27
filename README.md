@@ -49,7 +49,7 @@ Please install **pip** before anything
 Using **Conda**
 
 ```bash
-conda create -n enigma-ptsd python=3.10 -y
+conda create -n enigma-ptsd python=3.11 -y
 conda activate enigma-ptsd
 pip install -r requirements.txt
 ```
@@ -87,7 +87,7 @@ This does not follow a standard BIDS format. Having different annotation per sit
 
 #### Structural Images
 
-To create the 3D structural images on the **Destrieux** and **Desikan-Killiany-Tourville (DKT)** atlases run the follow Python command in the [**preprocessing**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing) folder
+To create the 3D structural images on the [**Destrieux**](https://nilearn.github.io/dev/modules/description/destrieux_surface.html) and [**Desikan-Killiany-Tourville (DKT)**](https://surfer.nmr.mgh.harvard.edu/fswiki/CorticalParcellation) atlases run the follow Python command in the [**preprocessing**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing) folder
 
 ```python
 python create_parcellation_structural.py
@@ -98,7 +98,7 @@ This command an take a couple of minutes, so be patient depending on the power o
 
 #### Resting state 4D images
 
-For generating projected 4D images from **Schaefer** and **Brainnetome** nii.gz images with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 for X, Y, Z voxel dimensions
+For generating projected 4D images from [**Schaefer**](https://nilearn.github.io/dev/modules/description/schaefer_2018.html) and [**Brainnetome**](https://atlas.brainnetome.org/download.html) nii.gz images with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 for X, Y, Z voxel dimensions. For installing freesurfer select the adequate tarball [here](https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads) and follow the instructions.
 
 ```python
 python create_parcellation_images_mni.py
@@ -133,7 +133,7 @@ Now load the bin folder in your bashrc system using the .sh code [here](https://
 ```python
 source fsl_load.sh
 ```
-Now you can inspect the quality of your data using **fsleyes** following this bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo.
+Now you can inspect the quality of your data using **fsleyes** following this bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo. The paths in the example are for site AMC
 
 ```bash
 fsleyes ../../AMC/sub-1132/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1153_schaefer_4d_image.nii.gz ../../AMC/sub-1132/sub-1153_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1153_Destrieux_thick_struct3D.nii.gz
@@ -146,3 +146,5 @@ fsleyes ../../AMC/sub-1132/sub-1153_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
 </td>
 
 Check the timeseries plots and the aligment of the different ROIs on each image to be sure the code is working as you expect.
+
+After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites 
