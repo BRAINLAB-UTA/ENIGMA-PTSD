@@ -141,7 +141,7 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="" target="_blank" rel="noopener noreferrer">
-        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1200" width="1500">
+        <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1500" width="1600">
       </a>
 </td>
 
