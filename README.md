@@ -64,13 +64,19 @@ pip install -r requirements.txt
 
 Here we describe the intended flow for producing the derived files needed by the dataloader.
 
-After you get access to the ENIGMA dataet you will see the main folder structure like this. Take into account this data is **NOT structured in BIDS format**.
+After you get access to the ENIGMA dataset you will see the main folder structure like this after you use *ls -lrth* command. Take into account this data is **NOT structured in BIDS format**.
 
-Data structure will have a distributed inputs (per subject) on each modality folder as follows given the input dataset:
+<td align="center" style="border: none; padding-right:24px;">
+      <a href="https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/ls_command.png" target="_blank" rel="noopener noreferrer">
+        <img src="assets/ls_command.png" alt="fsleyes QC" height="1200" width="1200">
+      </a>
+</td>
+
+The data structure is composed of a seriesof distributed inputs (per subject) on each modality folder as follows:
    - The **thickness**, **volume**, and **surface**  in the folder **Structural**
    - Resting-state fMRI (4D NIfTI) + metadata TR **.tsv** files, and the corresponding **.json** files in the folder **RSData**
-   - ALFF/fALFF/ReHo 3D images in the folder **falffReHo** also denoted as **aCompcorOnly**.
-   - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet** called 
+   - ALFF/fALFF/ReHo 3D images in the folder **falff_reHo** also denoted as the **aCompcorOnly** inner folder.
+   - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet** denoted as **ENIGMA-PGC_master_v1.3.1.xlsx**.
 
 
 The structure of each inner folder per modality will be like this:
@@ -145,7 +151,7 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
 ```
 
 <td align="center" style="border: none; padding-right:24px;">
-      <a href="" target="_blank" rel="noopener noreferrer">
+      <a href="https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/fsleyes_QC.png" target="_blank" rel="noopener noreferrer">
         <img src="assets/fsleyes_QC.png" alt="fsleyes QC" height="1500" width="1600">
       </a>
 </td>
