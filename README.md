@@ -107,32 +107,62 @@ The structure of each inner folder per modality will be like this:
 ```
 Again this data **does not follow a standard BIDS format**. The current code can handle different annotation and suffixes per site and modality this data comes with. Data is in process of re-annotation and BIDS data re-structuring.
 
+<br>
+<br>
+
 #### Structural Images
 
 To create the 3D structural images on the [**Destrieux**](https://nilearn.github.io/dev/modules/description/destrieux_surface.html) and [**Desikan-Killiany-Tourville (DKT)**](https://surfer.nmr.mgh.harvard.edu/fswiki/CorticalParcellation) atlases run the follow Python command in the [**preprocessing**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/tree/main/preprocessing) folder
 
+<br>
+<br>
+
 ```python
 python create_parcellation_structural.py <structural_path>
 ```
+<br>
+<br>
+
 This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and site.
 
 This command an take a couple of minutes, so be patient depending on the power of your CPU processing. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
+
+<br>
+<br>
+
 
 #### Resting state 4D images
 
 This code generates projected 4D **nii.gz** images from the preprocessed **.tsv** files in the **RSData** folder. The code generates 4D images from [**Schaefer**](https://nilearn.github.io/dev/modules/description/schaefer_2018.html) and [**Brainnetome**](https://atlas.brainnetome.org/download.html) atlases with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 in X, Y, Z voxel dimensions. You will need **freesurfer** to have those masks and atlases. To install **freesurfer** select the adequate tarball [here](https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads) and follow the instructions.
 
+<br>
+<br>
+
+
 ```python
 python create_parcellation_images_mni.py <rsdata_path> <atlases_path>
 ```
 
+<br>
+<br>
+
 For creating alternative 4D images with a **decimated factor** as an integer that resample the images on X, Y, Z voxels dimension you must run the following command. 
+
+<br>
+<br>
 
 ```python
 python create_parcellation_images_mni_smaller_resample.py <decimation_factor> <rsdata_path> <atlases_path>
 ```
 
+<br>
+<br>
+
 This code will generate the interim projected or projected/resampled images in the RSData folder with the corresponding Atlas suffix, such as, **schaefer** and **brainnetome** per subject and site. 
+
+<br>
+<br>
+
 
 #### ALFF/fALFF/ReHO
 
