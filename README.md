@@ -72,8 +72,10 @@ After you get access to the ENIGMA dataset you will see the main folder structur
       </a>
 </td>
 
-The data structure is composed of a seriesof distributed inputs (per subject) on each modality folder as follows:
-   - The **thickness**, **volume**, and **surface**  in the folder **Structural**
+
+The data structure is composed of a series of distributed inputs (per subject) on each modality folder as follows:
+
+   - The **thickness**, **volume**, and **surface**  **.xlsx** files in the folder **Structural**
    - Resting-state fMRI (4D NIfTI) + metadata TR **.tsv** files, and the corresponding **.json** files in the folder **RSData**
    - ALFF/fALFF/ReHo 3D images in the folder **falff_reHo** also denoted as the **aCompcorOnly** inner folder.
    - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet** denoted as **ENIGMA-PGC_master_v1.3.1.xlsx**.
