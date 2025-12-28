@@ -200,8 +200,8 @@ def personalize_atlas_for_subject(
 # coords = fetch_coords_power_2011()
 
 
-path_data = str(sys.argv[1])
-atlas_path = str(sys.argv[2])
+path_data = str(sys.argv[2])
+atlas_path = str(sys.argv[3])
 
 mni_mask_path = api.get("MNI152NLin2009cAsym", desc="brain", suffix="mask", extension=".nii.gz")
 
