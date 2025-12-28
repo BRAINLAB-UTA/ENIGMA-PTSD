@@ -64,7 +64,8 @@ pip install -r requirements.txt
 
 Here we describe the intended flow for producing the derived files needed by the dataloader.
 
-After you get access to the ENIGMA dataset you will see the main folder structure like this after you use *ls -lrth* command. Take into account this data is **NOT structured in BIDS format**.
+After you get access to the ENIGMA dataset you will see the main folder structure like this after you use *ls -lrth* command. Take into account this data is **NOT structured in BIDS format**. This main folder represent the **input subfolders location** for **RSData**, **Structure**, and **falff_ReHo**
+absolute paths in your Python codes.
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/ls_command.png" target="_blank" rel="noopener noreferrer">
