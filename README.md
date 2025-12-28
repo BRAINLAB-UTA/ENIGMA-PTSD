@@ -64,21 +64,26 @@ pip install -r requirements.txt
 
 Here we describe the intended flow for producing the derived files needed by the dataloader.
 
-You generally need (per subject) on each modality folder:
-   - T1w anatomical image 3D NIfTI .nii.gz in the folder **Structural**
-   - Resting-state fMRI (4D NIfTI) + metadata TR, etc written in .json files in the folder **RSData**
-   - ALFF/fALFF/ReHo 3D images in the folder **falffReHo**
-   - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet**
+After you get access to the ENIGMA dataet you will see the main folder structure like this. Take into account this data is **NOT structured in BIDS format**.
 
-The structure of each folder modality will be like this:
+Data structure will have a distributed inputs (per subject) on each modality folder as follows given the input dataset:
+   - The **thickness**, **volume**, and **surface**  in the folder **Structural**
+   - Resting-state fMRI (4D NIfTI) + metadata TR **.tsv** files, and the corresponding **.json** files in the folder **RSData**
+   - ALFF/fALFF/ReHo 3D images in the folder **falffReHo** also denoted as **aCompcorOnly**.
+   - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet** called 
+
+
+The structure of each inner folder per modality will be like this:
 
 ```text
 /DATA_Modality/
   siteA/
     sub-XXXX/
-        T1w.nii.gz
-        rest.nii.gz
-        falff_reho.nii.gz
+        ..rest.tsv
+        or
+        ..structure_thick_vol_surf.xlsx
+        or
+        ..falff_reho.nii.gz
   siteB/
     sub-YYYY/
       ...
