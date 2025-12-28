@@ -88,7 +88,7 @@ The structure of each inner folder per modality will be like this:
     sub-YYYY/
       ...
 ```
-This does not follow a standard BIDS format. Having different annotation per site and modality this code can handle.
+Again this data **does not follow a standard BIDS format**. The current code can handle different annotation and suffixes per site and modality this data comes with. Data is in process of re-annotation and BIDS data re-structuring.
 
 #### Structural Images
 
