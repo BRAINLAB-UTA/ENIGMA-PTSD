@@ -111,13 +111,13 @@ This command an take a couple of minutes, so be patient depending on the power o
 
 #### Resting state 4D images
 
-For generating projected 4D images from [**Schaefer**](https://nilearn.github.io/dev/modules/description/schaefer_2018.html) and [**Brainnetome**](https://atlas.brainnetome.org/download.html) nii.gz images with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 for X, Y, Z voxel dimensions. For installing freesurfer select the adequate tarball [here](https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads) and follow the instructions.
+This code generates projected 4D **nii.gz** images from the preprocessed **.tsv** files in the **RSData** folder. The code generates 4D images from [**Schaefer**](https://nilearn.github.io/dev/modules/description/schaefer_2018.html) and [**Brainnetome**](https://atlas.brainnetome.org/download.html) atlases with the original resolution of the **MNI** mask **MNI152NLin2009cAsym** from **freesurfer** 193 x 215 x 193 in X, Y, Z voxel dimensions. You will need **freesurfer** to have those masks and atlases. To install **freesurfer** select the adequate tarball [here](https://surfer.nmr.mgh.harvard.edu/fswiki/rel7downloads) and follow the instructions.
 
 ```python
 python create_parcellation_images_mni.py
 ```
 
-For creating alternative 4D images with **decimated factor** as an integer that resample the images on X, Y, Z voxels dimension you must run the following command 
+For creating alternative 4D images with a **decimated factor** as an integer that resample the images on X, Y, Z voxels dimension you must run the following command. 
 
 ```python
 python create_parcellation_images_mni_smaller_resample.py <decimation_factor>
