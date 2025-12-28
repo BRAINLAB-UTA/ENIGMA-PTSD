@@ -16,6 +16,7 @@ Outputs are organized under per-site and per-subject folders.
 
 import os
 import warnings
+import sys
 
 import nibabel as nib
 import numpy as np
@@ -291,7 +292,7 @@ def run_structural_parcellation(
 
 # START THE MAIN CODE HER AND INVOKE THEM AS THE FUNCTION IN 3**
 # get the Structural path
-struct_path = "../../Data/Structural/"
+struct_path = str(sys.argv[1])
 
 # use nilearn to define what will be the Destrieux atlas
 destrieux = fetch_atlas_destrieux_2009(lateralized=True)

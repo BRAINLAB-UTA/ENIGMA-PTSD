@@ -12,12 +12,13 @@ to detect truncated/corrupted files without loading full volumes into memory.
 """
 
 import os
+import sys
 
 import nibabel as nib
 import numpy as np
 from loguru import logger
 
-path_data = "../../Data/RSData/"
+path_data = str(sys.argv[1])
 
 ok_files = []
 bad_files = []

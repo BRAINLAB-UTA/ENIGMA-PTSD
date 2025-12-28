@@ -146,7 +146,9 @@ def personalize_atlas_for_subject(
 # coords = fetch_coords_power_2011()
 
 
-path_data = "../../Data/RSData/"
+path_data = str(sys.argv[1])
+atlas_path = str(sys.argv[2])
+
 mni_mask_path = api.get("MNI152NLin2009cAsym", desc="brain", suffix="mask", extension=".nii.gz")
 
 
@@ -212,10 +214,10 @@ def tsv_to_4d_parcellation(tsv_path, subj_atlas, affine, header, out_path, n_roi
 """
 
 # define the atlas files here
-schaefer_atlas_file = "../../Atlases/tpl-MNI152NLin2009cAsym_atlas-schaefer2011Combined_dseg.nii.gz"
-power_atlas_file = "../../Atlases/tpl-MNI152NLin2009cAsym_atlas-power2011_dseg.nii.gz"
+schaefer_atlas_file = f"{atlas_path}/Atlases/tpl-MNI152NLin2009cAsym_atlas-schaefer2011Combined_dseg.nii.gz"
+power_atlas_file = f"{atlas_path}/Atlases/tpl-MNI152NLin2009cAsym_atlas-power2011_dseg.nii.gz"
 brainnetome_atlas_file = (
-    "../../Atlases/tpl-MNI152NLin2009cAsym_atlas-brainnetomeCombined_dseg.nii.gz"
+    f"{atlas_path}/Atlases/tpl-MNI152NLin2009cAsym_atlas-brainnetomeCombined_dseg.nii.gz"
 )
 
 subjects_missing = [
