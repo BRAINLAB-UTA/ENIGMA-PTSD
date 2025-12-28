@@ -68,7 +68,7 @@ After you get access to the ENIGMA dataset you will see the main folder structur
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/ls_command.png" target="_blank" rel="noopener noreferrer">
-        <img src="assets/ls_command.png" alt="ls command" height="1200" width="1200">
+        <img src="assets/ls_command.png" alt="ls command" height="1000" width="900">
       </a>
 </td>
 
