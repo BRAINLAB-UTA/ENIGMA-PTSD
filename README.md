@@ -73,6 +73,8 @@ absolute paths in your Python codes.
       </a>
 </td>
 
+<p>
+<p>
 
 The data structure is composed of a series of distributed inputs (per subject) on each modality folder as follows:
 
@@ -81,6 +83,8 @@ The data structure is composed of a series of distributed inputs (per subject) o
    - ALFF/fALFF/ReHo 3D images in the folder **falff_reHo** also denoted as the **aCompcorOnly** inner folder.
    - Site/subject mapping tables (IDs, site names), as used by the ENIGMA project in main **ENIGMA anotation spreadsheet** denoted as **ENIGMA-PGC_master_v1.3.1.xlsx**.
 
+<p>
+<p>
 
 The structure of each inner folder per modality will be like this:
 
