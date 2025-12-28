@@ -168,6 +168,9 @@ This code will generate the interim projected or projected/resampled images in t
 
 This images are already derived from the **aCompcorOnly** folder there are not need to be processed before running the dataloader.
 
+<br>
+<br>
+
 #### Visualization after image projection
 
 For doing a visual QC process after the images are generated per site and subject
@@ -176,20 +179,40 @@ First install **FSL** following the steps in the officinal website [https://fsl.
 
 For installing **FSL** download the [**fslinstaller.py**](https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/fslinstaller.py) file run this commands and set up a folder in your local machine to get the bin files.
 
+<br>
+<br>
+
 ```python
 python fslinstaller.py
 ```
 
+<br>
+<br>
+
 Now load the bin folder in your bashrc system using the .sh code [here](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/fsl_load.sh) and running this. First locate where your **FSL** files are located in your local machine and modify the bash file with the right path.
+
+<br>
+<br>
 
 ```python
 source fsl_load.sh
 ```
+
+<br>
+<br>
+
 Now you can inspect the quality of your data using **fsleyes** based on the following bash command from the same subject and site having the absolute path of the 3D Structural, 4D RSData, and 3D falff.ReHo. The paths in the example are for site AMC. In fsleyes change the opacity of the 4D images to 0.5, and change the 3D images parcellation colormap from grayscale to **HSV**.
+
+<br>
+<br>
+
 
 ```bash
 fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_4d_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1132_Destrieux_thick_struct3D.nii.gz
 ```
+
+<br>
+<br>
 
 <td align="center" style="border: none; padding-right:24px;">
       <a href="https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/fsleyes_QC.png" target="_blank" rel="noopener noreferrer">
@@ -197,6 +220,12 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
       </a>
 </td>
 
+<br>
+<br>
+
 Check the timeseries plots and the aligment of the different ROIs on each image to be sure the code is working as you expect.
+
+<br>
+<br>
 
 After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites [**'Duke', 'Muenster', 'WacoVA', 'Capetown', 'AMC', 'Lawson', 'Vanderbilt', 'Ghent', 'MinnVA', 'Milwaukee', 'Emory', 'Masaryk', 'Beijing', 'UWash', 'Grupe', 'McLean', 'NanjingYixing', 'Tours', 'Toledo', 'Groningen'**]
