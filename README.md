@@ -75,7 +75,9 @@ absolute paths in your Python codes.
 
 <p>
 <p>
-
+<br>
+<br>
+  
 The data structure is composed of a series of distributed inputs (per subject) on each modality folder as follows:
 
    - The **thickness**, **volume**, and **surface**  **.xlsx** files in the folder **Structural**
@@ -85,6 +87,8 @@ The data structure is composed of a series of distributed inputs (per subject) o
 
 <p>
 <p>
+<br>
+<br>
 
 The structure of each inner folder per modality will be like this:
 
