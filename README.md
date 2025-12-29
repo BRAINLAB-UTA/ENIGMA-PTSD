@@ -164,7 +164,7 @@ This code will generate the interim projected or projected/resampled images in t
 <br>
 
 
-#### ALFF/fALFF/ReHO
+#### ALFF/fALFF/ReHo
 
 This images are already derived from the **aCompcorOnly** folder there are not need to be processed before running the dataloader.
 
