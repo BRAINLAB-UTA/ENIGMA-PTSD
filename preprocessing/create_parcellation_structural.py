@@ -297,6 +297,7 @@ struct_path = str(sys.argv[1])
 # use nilearn to define what will be the Destrieux atlas
 destrieux = fetch_atlas_destrieux_2009(lateralized=True)
 
+# get the DKT atlas previous downloaded
 A2009S_ATLAS = destrieux.maps  # path to NIfTI file
 A2009S_LABELS = destrieux.labels
 DKT40_ATLAS = "./bert_aparc.DKTatlas+aseg.nii.gz"
