@@ -60,6 +60,9 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+<h2><b> For a full installation guide for all the OS following this [Installation Guide](docs/installationGUIDE.md) </b></h2>
+
 ### 3) Data generation (structural, fALFF/ReHo, RSData)
 
 Here we describe the intended flow for producing the derived files needed by the dataloader.
