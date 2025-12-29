@@ -24,7 +24,7 @@ wget -O fslinstaller.py https://fsl.fmrib.ox.ac.uk/fsldownloads/fslinstaller.py
 python fslinstaller.py
 ```
 
-Add FSL to PATH (restart terminal after) using the source file [here]
+Add FSL to PATH (restart terminal after) using the source file [here](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/fsl_load.sh), be sure you are exporting the right absolute path with the FSL bin files in your machine.
 
 
 Launch FSLeyes (already bundled with FSL):
@@ -102,7 +102,8 @@ Open PowerShell terminal as Command Prompt as administrator and run:
 wsl --install
 ```
 
-Now run the same instruction defined in the Linux section [here]
+Now run the same instruction defined in the Linux section [here](#1-linux-ubuntu--debian)
+
 
 
 
