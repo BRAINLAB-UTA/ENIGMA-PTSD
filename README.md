@@ -174,7 +174,7 @@ This images are already derived from the **aCompcorOnly** folder there are not n
 <br>
 <br>
 
-#### Visualization after image projection
+## 4) Visualization after image projection
 
 For doing a visual QC process after the images are generated per site and subject
 
@@ -235,7 +235,7 @@ Check the timeseries plots and the aligment of the different ROIs on each image 
 
 After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites [**'Duke', 'Muenster', 'WacoVA', 'Capetown', 'AMC', 'Lawson', 'Vanderbilt', 'Ghent', 'MinnVA', 'Milwaukee', 'Emory', 'Masaryk', 'Beijing', 'UWash', 'Grupe', 'McLean', 'NanjingYixing', 'Tours', 'Toledo', 'Groningen'**]
 
-## Static code evaluation
+## 5) Static code evaluation
 
 For testing the quality of your code please follow the bash commands here as a standardized [**pylinter**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/preprocessing/standardize_template.sh). Do that for each subfolder you have running the following bash command.
 
