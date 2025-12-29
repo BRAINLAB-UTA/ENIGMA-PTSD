@@ -208,7 +208,7 @@ Now you can inspect the quality of your data using **fsleyes** based on the foll
 
 
 ```bash
-fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_4d_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1132_Destrieux_thick_struct3D.nii.gz
+fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_4d_image.nii.gz ../../AMC/sub-1132/sub-1132_schaefer_mni_image.nii.gz ../../AMC/sub-1132/sub-1132_brainnetome_mni_image.nii.gz ../../AMC/sub-1132/1132_Destrieux_thick_struct3D.nii.gz
 ```
 
 <br>
