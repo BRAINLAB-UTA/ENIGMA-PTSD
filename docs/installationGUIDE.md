@@ -90,6 +90,8 @@ export FREESURFER_HOME=/Applications/freesurfer
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
 which recon-all
 ```
+
+---
  
 ## 3) Windows 11/10 (Recommended: WSL2)
 
