@@ -123,7 +123,7 @@ python create_parcellation_structural.py <structural_path>
 <br>
 <br>
 
-This codes generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and site.
+This code generates three different type of 3D image in the **Structural** folder with **vol** (Volume), **thick** (Cortical Thickness), and **surf** (Surface) data and the corresponding suffixes per subject and site.
 
 This command an take a couple of minutes, so be patient depending on the power of your CPU processing. **Take into account you must change the absolute or relative path directories for all the modalities before running this command and the following**. 
 
