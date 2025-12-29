@@ -61,7 +61,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-<h2> For a full installation guide for all the OS following this <b>[Installation Guide](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/docs/installationGUIDE.md) </b></h2>
+<h2> For a full installation guide for all the OS following this <b> [Installation Guide](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/docs/installationGUIDE.md) </b></h2>
 
 ### 3) Data generation (structural, fALFF/ReHo, RSData)
 
