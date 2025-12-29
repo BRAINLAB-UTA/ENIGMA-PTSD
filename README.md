@@ -219,6 +219,7 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
         <img src="assets/fsleyes_QC.png" alt="fsleyes QC alt"   height="4840" width="3160">
       </a>
 </td>
+
 [**Click here for better visualization**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/fsleyes_QC.png)
 
 <br>
