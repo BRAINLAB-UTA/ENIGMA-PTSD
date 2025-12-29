@@ -220,27 +220,6 @@ brainnetome_atlas_file = (
     f"{atlas_path}/Atlases/tpl-MNI152NLin2009cAsym_atlas-brainnetomeCombined_dseg.nii.gz"
 )
 
-subjects_missing = [
-    "sub-S26",
-    "sub-S66",
-    "sub-S15",
-    "sub-S62",
-    "sub-S68",
-    "sub-S50",
-    "sub-S06",
-    "sub-S71",
-    "sub-S49",
-    "sub-S43",
-    "sub-S34",
-    "sub-S39",
-    "sub-S33",
-    "sub-S76",
-    "sub-S01",
-    "sub-S20",
-    "sub-S57",
-    "sub-S18",
-]
-
 # get here first the sites names to continue processing - as first level folders
 for site in os.listdir(path_data):
     if "." not in site:
