@@ -234,3 +234,21 @@ Check the timeseries plots and the aligment of the different ROIs on each image 
 <br>
 
 After concatenating all subjects that define **RSData**, **Structural**, and **fALFF/ReHo** data we obtained a final overlap of **1668 subjects** for the sites [**'Duke', 'Muenster', 'WacoVA', 'Capetown', 'AMC', 'Lawson', 'Vanderbilt', 'Ghent', 'MinnVA', 'Milwaukee', 'Emory', 'Masaryk', 'Beijing', 'UWash', 'Grupe', 'McLean', 'NanjingYixing', 'Tours', 'Toledo', 'Groningen'**]
+
+## Static code evaluation
+
+For testing the quality of your code please follow the bash commands here as a standardized [**pylinter**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/preprocessing/standardize_template.sh). Do that for each subfolder you have running the following bash command.
+
+<br>
+<br>
+
+```bash
+ source standardize_template.sh
+```
+
+<br>
+<br>
+
+Customize your **toml** file following the rules [here](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/preprocessing/pyproject.toml) and be sure to obtain a minimum grade of **8** out of 10 for your static code evaluation per folder.
+
+
