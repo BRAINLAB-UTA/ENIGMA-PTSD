@@ -1,4 +1,4 @@
-Installation Guide (Mixed OS)
+# Installation Guide (Mixed OS)
 
 This guide provides installation steps for the **ENIGMA-PTSD repo (Python 3.11)**, **FSL (with FSLeyes)**, and **FreeSurfer** on Linux, macOS, and Windows (via WSL2).
 
