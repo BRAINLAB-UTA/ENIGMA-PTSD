@@ -655,7 +655,7 @@ class StreamPairs(Dataset):
            # print this in the report to check the ids for the shorter trials
            logger.error(f"The data length is very short and its length is {time_length} secs for subject {self.subject_sites['subjects_rs'][idx]} and site {self.sites_all[idx]}")
            # skip this subject because it is too short to take enough time information
-           continue
+           return None
 
         # do the resample using nearest approach
         new_in_current = np.round(idxs_vals * fs_current / fs_new).astype(int)
