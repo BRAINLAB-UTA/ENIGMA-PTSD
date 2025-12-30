@@ -223,7 +223,7 @@ fsleyes ../../AMC/sub-1132/sub-1132_schaefer_4d_mni_image.nii.gz ../../AMC/sub-1
       </a>
 </td>
 
-[**Click here for better visualization**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/fsleyes_QC.png)
+[**Click here for better visualization**](https://github.com/BRAINLAB-UTA/ENIGMA-PTSD/blob/main/assets/fsleyes_QC_better.png)
 
 <br>
 <br>
