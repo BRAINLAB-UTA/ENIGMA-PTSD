@@ -460,6 +460,6 @@ if __name__ == "__main__":
             # logger.success(f"batch size index {idx}")
 
         # report the interim loss here
-        mean_loss = torch.stack([t.detach() for m in loss_interim]).mean()
+        mean_loss = torch.stack([m.detach() for m in loss_interim]).mean()
         mean_loss_value = mean_loss.item()
         logger.info(f"Training iteration {iter} with loss: {mean_loss_value}..")
