@@ -36,7 +36,8 @@ warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # set the plt fontsizes
-plt.rc('font', size=16)          # Controls default text sizes (axes, ticks, legend, etc.)
+# Controls default text sizes (axes, ticks, legend, etc.)
+plt.rc('font', size=16)
 plt.rc('axes', titlesize=17)     # Font size of the axes title
 plt.rc('axes', labelsize=15)     # Font size of the x and y axis labels
 plt.rc('xtick', labelsize=14)    # Font size of the x-axis tick labels
@@ -75,7 +76,14 @@ SUB = []
 # plot the histogram with defined values
 
 # define a function to skip the files that doesnt exist in the RSData part
-def plot_histogram(data, x_string: str, y_string: str, bins: int, counts_show: bool):
+
+
+def plot_histogram(
+        data,
+        x_string: str,
+        y_string: str,
+        bins: int,
+        counts_show: bool):
     """
       Plot a normalized histogram of `data` and overlay a Gaussian (normal) PDF fit.
 
@@ -104,7 +112,8 @@ def plot_histogram(data, x_string: str, y_string: str, bins: int, counts_show: b
     fig, ax = plt.subplots(figsize=(12, 10))
 
     if counts_show is True:
-        counts, bin_edges, _ = ax.hist(data, bins=bins, density=False, alpha=0.6, edgecolor="black")
+        counts, bin_edges, _ = ax.hist(
+            data, bins=bins, density=False, alpha=0.6, edgecolor="black")
     else:
         ax.hist(data, bins=bins, density=True, alpha=0.6, edgecolor="black")
 
@@ -112,25 +121,35 @@ def plot_histogram(data, x_string: str, y_string: str, bins: int, counts_show: b
     sigma = np.std(data, ddof=1)
 
     xx = np.linspace(np.min(data), np.max(data), 500)
-    normal_pdf = (1.0 / (sigma * np.sqrt(2*np.pi))) * np.exp(-0.5 * ((xx - mu) / sigma) ** 2)
+    normal_pdf = (1.0 / (sigma * np.sqrt(2 * np.pi))) * \
+        np.exp(-0.5 * ((xx - mu) / sigma) ** 2)
 
     if counts_show is True:
-       # Scale pdf to match histogram counts
-       bin_width = bin_edges[1] - bin_edges[0]
-       normal_counts = normal_pdf * len(data) * bin_width
-       ax.plot(xx, normal_counts, linewidth=2, label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+        # Scale pdf to match histogram counts
+        bin_width = bin_edges[1] - bin_edges[0]
+        normal_counts = normal_pdf * len(data) * bin_width
+        ax.plot(
+            xx,
+            normal_counts,
+            linewidth=2,
+            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
     else:
-       ax.plot(xx, normal_pdf, linewidth=2, label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+        ax.plot(
+            xx,
+            normal_pdf,
+            linewidth=2,
+            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
     ax.grid()
     ax.set_xlabel(x_string)
     ax.set_ylabel(y_string)
     # ax.set_title(title)
     fig.tight_layout()
     if counts_show is True:
-       fig.savefig(f"./histogram_{x_string}_counts.jpg")
+        fig.savefig(f"./histogram_{x_string}_counts.jpg")
     else:
-       fig.savefig(f"./histogram_{x_string}.jpg")
+        fig.savefig(f"./histogram_{x_string}.jpg")
     plt.close("all")
+
 
 def collate_drop_none(batch):
     """
@@ -183,7 +202,9 @@ class StreamPairs(Dataset):
         rs_path,
         st_path,
         falff_reho_path,
-        rs_time_window=20,  # initial set of time_points used for -  each get_item define this in SECOND
+        rs_time_window=20,
+        # initial set of time_points used for -  each get_item define this in
+        # SECOND
         rs_window_crop=30,  # this should lower of equal to the final resample vector len
         rs_random_window=False,
         rs_stride=4,
@@ -218,7 +239,12 @@ class StreamPairs(Dataset):
         self.sub_st = [str(item) for item in self.subject_sites["subjects_st"]]
 
         # define the sites for changing the subject suffixes
-        self.special_sites_1 = ["Ghent", "Toledo", "Tours", "NanjingYixing", "Masaryk"]
+        self.special_sites_1 = [
+            "Ghent",
+            "Toledo",
+            "Tours",
+            "NanjingYixing",
+            "Masaryk"]
         self.special_sites_2 = ["Beijing", "Capetown", "Cisler"]
 
         self.rs_path = rs_path
@@ -257,24 +283,27 @@ class StreamPairs(Dataset):
                 )
 
                 # perform the decimation here
-                self.st_DATA.append(
-                    [
-                        self.st_data_site["rs_tensor_3d_dest_surf"][
-                            :, :: self.st_stride, :: self.st_stride, :: self.st_stride
-                        ],
-                        self.st_data_site["rs_tensor_3d_dest_thick"][
-                            :, :: self.st_stride, :: self.st_stride, :: self.st_stride
-                        ],
-                        self.st_data_site["rs_tensor_3d_dest_vol"][
-                            :, :: self.st_stride, :: self.st_stride, :: self.st_stride
-                        ],
-                    ]
-                )
-                self.st_subjects.append(self.st_data_site["subjects"][:, 1].tolist())
-                logger.info(f"Read structural for site {self.sites[index_sites]}")
+                self.st_DATA.append([self.st_data_site["rs_tensor_3d_dest_surf"][:,
+                                                                                 :: self.st_stride,
+                                                                                 :: self.st_stride,
+                                                                                 :: self.st_stride],
+                                     self.st_data_site["rs_tensor_3d_dest_thick"][:,
+                                                                                  :: self.st_stride,
+                                                                                  :: self.st_stride,
+                                                                                  :: self.st_stride],
+                                     self.st_data_site["rs_tensor_3d_dest_vol"][:,
+                                                                                :: self.st_stride,
+                                                                                :: self.st_stride,
+                                                                                :: self.st_stride],
+                                     ])
+                self.st_subjects.append(
+                    self.st_data_site["subjects"][:, 1].tolist())
+                logger.info(
+                    f"Read structural for site {self.sites[index_sites]}")
 
             # saving the st variables firt to do the del afterwards
-            self.st_DATA = np.array(self.st_DATA, dtype=object)  # (N_total, X, Y, Z)
+            self.st_DATA = np.array(
+                self.st_DATA, dtype=object)  # (N_total, X, Y, Z)
             np.save(
                 "../../Data/npy/structural_npys_all.npy",
                 self.st_DATA,
@@ -326,7 +355,8 @@ class StreamPairs(Dataset):
                 self.falff_subjects.append(
                     self.falff_reho_data_site["subjects"][:, 1].tolist()
                 )
-                logger.info(f"Read falff_reho for site {self.sites[index_sites]}")
+                logger.info(
+                    f"Read falff_reho for site {self.sites[index_sites]}")
 
             # save the interim files as npy for not reading them again using
 
@@ -542,15 +572,22 @@ class StreamPairs(Dataset):
 
             if self.sites_all[idx] == "Cisler":
                 rs_data_path_1 = (
-                    self.rs_path
-                    + "/"
-                    + self.sites_all[idx]
-                    + "/"
-                    + subject_rs_path_1.replace("DOP", "DOP_").replace("PAL", "PAL_")
-                    + "/"
-                    + subject_rs_path_1.replace("DO", "dO").replace("PA", "pA")
-                    + "_brainnetome_4d_mni_image.nii.gz"
-                )
+                    self.rs_path +
+                    "/" +
+                    self.sites_all[idx] +
+                    "/" +
+                    subject_rs_path_1.replace(
+                        "DOP",
+                        "DOP_").replace(
+                        "PAL",
+                        "PAL_") +
+                    "/" +
+                    subject_rs_path_1.replace(
+                        "DO",
+                        "dO").replace(
+                        "PA",
+                        "pA") +
+                    "_brainnetome_4d_mni_image.nii.gz")
             elif self.sites_all[idx] == "Capetown":
                 rs_data_path_11 = (
                     self.rs_path
@@ -634,7 +671,8 @@ class StreamPairs(Dataset):
         fs_current = 1 / self.tr_vals[self.sites_all[idx]]
         fs_new = 1 / self.tr_vals["max"]
 
-        # validate maximum length here - to avoud problems with the maximum time-series length
+        # validate maximum length here - to avoud problems with the maximum
+        # time-series length
         if int(self.rs_time_window * fs_current) <= rs_img.dataobj.shape[3]:
             idxs_vals = np.arange(0, int(self.rs_time_window * fs_current), 1)
         else:
@@ -647,8 +685,10 @@ class StreamPairs(Dataset):
         time_length = float(rs_img.dataobj.shape[3] / fs_current)
         if time_length <= 200:
             # print this in the report to check the ids for the shorter trials
-            logger.error(f"The data length is very short and its length is {time_length} secs for subject {self.subject_sites['subjects_rs'][idx]} and site {self.sites_all[idx]}")
-            # skip this subject because it is too short to take enough time information
+            logger.error(
+                f"The data length is very short and its length is {time_length} secs for subject {self.subject_sites['subjects_rs'][idx]} and site {self.sites_all[idx]}")
+            # skip this subject because it is too short to take enough time
+            # information
             return None
 
         # do the resample using nearest approach
@@ -657,24 +697,21 @@ class StreamPairs(Dataset):
         # do this in traditional way for integer labels
         idx_resamp = np.rint(new_in_current).astype(int)
         idx_resamp = np.clip(idx_resamp, 0, len(idxs_vals) - 1)
-        # remove the duplicates out of the batch and clip it to the maximum value
+        # remove the duplicates out of the batch and clip it to the maximum
+        # value
         new_index = idxs_vals[idx_resamp]
-        new_index[0 : self.rs_window_crop] = np.clip(
-            new_index[0 : self.rs_window_crop], 0, len(idxs_vals) - 1
+        new_index[0: self.rs_window_crop] = np.clip(
+            new_index[0: self.rs_window_crop], 0, len(idxs_vals) - 1
         )
 
-        # do the indexing one by one to avoid memory overloading and faster processing
-        rs_data = np.stack(
-            [
-                np.asarray(
-                    rs_img.dataobj[
-                        :: self.rs_stride, :: self.rs_stride, :: self.rs_stride, int(t)
-                    ]
-                )
-                for t in new_index[0 : self.rs_window_crop]
-            ],
-            axis=-1,
-        )
+        # do the indexing one by one to avoid memory overloading and faster
+        # processing
+        rs_data = np.stack([np.asarray(rs_img.dataobj[:: self.rs_stride,
+                                                      :: self.rs_stride,
+                                                      :: self.rs_stride,
+                                                      int(t)]) for t in new_index[0: self.rs_window_crop]],
+                           axis=-1,
+                           )
 
         # older version*** UNCOMMENT IT IF CONSIDER**
         # rs_data = np.asarray(
@@ -754,7 +791,7 @@ class StreamPairs(Dataset):
             falff_reho_data_input,
             self.subject_sites["subjects_rs"][idx],
             self.sites_all[idx],
-            new_index[0 : self.rs_window_crop],
+            new_index[0: self.rs_window_crop],
             time_length,
             self.tr_vals[self.sites_all[idx]]
         )
@@ -802,65 +839,91 @@ def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
     return data_loader_all
 
 
-"""
-  **Main section of the code**
-"""
+if __name__ == "__main__":
 
-# read the dataloder object here
-data_loader_all = define_dataset_dataloader_ENIGMA(
-    subject_indices_current_data=subject_indices_current_data
-)
+    """
+      **Main section of the code**
+    """
 
-start_time = time.time()
-
-# check if the dataloader works
-idx_sample = []
-sites_sample = []
-tr_values = []
-time_sub_values = []
-for batch_data in data_loader_all:
-    if batch_data is None:  # validate this when batch is None and skip
-        continue
-
-    idx, rs_DATA, st_DATA, falff_reho_DATA, subject_index, sites_idx, sampling_index, time_subject, TRs = (
-        batch_data
+    # read the dataloder object here
+    data_loader_all = define_dataset_dataloader_ENIGMA(
+        subject_indices_current_data=subject_indices_current_data
     )
-    tr_values.append(TRs)
-    idx_sample.append(idx)
-    time_sub_values.append(time_subject)
-    sites_sample.append(sites_idx)
-    logger.info(f"Reading modalities for subject {subject_index}")
 
-time_sub_values = [str(s) for sublist in time_sub_values for s in sublist]
-time_sub_values_np = np.asarray(time_sub_values)
-tr_values = [str(s) for sublist in tr_values for s in sublist]
-tr_values = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group()) for s in tr_values],dtype=np.float32)
+    start_time = time.time()
 
-time_sub_values_np = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group()) for s in time_sub_values_np],dtype=np.float32)
-sites_flat = [str(s) for sublist in sites_sample for s in sublist]
-sites_unique = list(dict.fromkeys(sites_flat))
+    # check if the dataloader works
+    idx_sample = []
+    sites_sample = []
+    tr_values = []
+    time_sub_values = []
+    for batch_data in data_loader_all:
+        if batch_data is None:  # validate this when batch is None and skip
+            continue
 
-# check the final time of dataloder reader
-end_time = time.time()
+        idx, rs_DATA, st_DATA, falff_reho_DATA, subject_index, sites_idx, sampling_index, time_subject, TRs = (
+            batch_data)
+        tr_values.append(TRs)
+        idx_sample.append(idx)
+        time_sub_values.append(time_subject)
+        sites_sample.append(sites_idx)
+        logger.info(f"Reading modalities for subject {subject_index}")
 
-logger.info(f"dataloader final time reading after decimation {end_time - start_time} s")
-logger.info(f"subjects with all modalities {len(torch.cat(idx_sample))}")
-logger.info(
-    f"data from sites {sites_unique} are taking into account in this dataloader"
-)
+    time_sub_values = [str(s) for sublist in time_sub_values for s in sublist]
+    time_sub_values_np = np.asarray(time_sub_values)
+    tr_values = [str(s) for sublist in tr_values for s in sublist]
+    tr_values = np.array([float(re.search(r"[-+]?\d*\.?\d+", s).group())
+                         for s in tr_values], dtype=np.float32)
 
-# convert the report here defined in the loguru configuration above coloured
-conv = Ansi2HTMLConverter(inline=True)
-ansi = open("report_final_excluded_subjects.log", encoding="utf-8").read()
-html = f"""<!doctype html><meta charset="utf-8">
-<body style="background:#111;color:#eee;font-family:monospace;white-space:pre-wrap">
-{conv.convert(ansi, full=False)}
-</body>"""
+    time_sub_values_np = np.array([float(re.search(
+        r"[-+]?\d*\.?\d+", s).group()) for s in time_sub_values_np], dtype=np.float32)
+    sites_flat = [str(s) for sublist in sites_sample for s in sublist]
+    sites_unique = list(dict.fromkeys(sites_flat))
 
-open("report_final_excluded_subjects.html", "w", encoding="utf-8").write(html)
+    # check the final time of dataloder reader
+    end_time = time.time()
 
-## do the histogram plot here
-plot_histogram(data=time_sub_values_np, x_string="trial length [s]", y_string="probability", bins=10, counts_show=False)
-plot_histogram(data=tr_values, x_string="TR [s]", y_string="probability", bins=5, counts_show=False)
-plot_histogram(data=time_sub_values_np, x_string="trial length [s]", y_string="counts", bins=10, counts_show=True)
-plot_histogram(data=tr_values, x_string="TR [s]", y_string="counts", bins=5, counts_show=True)
+    logger.info(
+        f"dataloader final time reading after decimation {end_time - start_time} s")
+    logger.info(f"subjects with all modalities {len(torch.cat(idx_sample))}")
+    logger.info(
+        f"data from sites {sites_unique} are taking into account in this dataloader"
+    )
+
+    # convert the report here defined in the loguru configuration above
+    # coloured
+    conv = Ansi2HTMLConverter(inline=True)
+    ansi = open("report_final_excluded_subjects.log", encoding="utf-8").read()
+    html = f"""<!doctype html><meta charset="utf-8">
+	<body style="background:#111;color:#eee;font-family:monospace;white-space:pre-wrap">
+	{conv.convert(ansi, full=False)}
+	</body>"""
+
+    open("report_final_excluded_subjects.html",
+         "w", encoding="utf-8").write(html)
+
+    # do the histogram plot here
+    plot_histogram(
+        data=time_sub_values_np,
+        x_string="trial length [s]",
+        y_string="probability",
+        bins=10,
+        counts_show=False)
+    plot_histogram(
+        data=tr_values,
+        x_string="TR [s]",
+        y_string="probability",
+        bins=5,
+        counts_show=False)
+    plot_histogram(
+        data=time_sub_values_np,
+        x_string="trial length [s]",
+        y_string="counts",
+        bins=10,
+        counts_show=True)
+    plot_histogram(
+        data=tr_values,
+        x_string="TR [s]",
+        y_string="counts",
+        bins=5,
+        counts_show=True)
