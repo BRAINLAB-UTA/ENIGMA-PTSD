@@ -493,6 +493,23 @@ if __name__ == "__main__":
 
     model_path = f"./models/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
     vis_path = f"./visualization/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+
+    # validates this first!!
+    if os.path.exists(model_path):
+       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
+       MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
+       SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
+       WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
+       LOSS_vals = read_metric_txt(f"{model_path}/losses_interim.txt")
+       ITERS = list(range(0, start_iter, 10))
+    else:
+       start_iter = 0
+       MI_vals = []
+       SIL_vals = []
+       WD_vals = []
+       ITERS = []
+       LOSS_vals = []
+
     # Define here the models and plot folders for interim results visualization
     if not  os.path.exists(model_path):
        os.makedirs(model_path, exist_ok=True)
@@ -697,24 +714,9 @@ if __name__ == "__main__":
 
     # define the optimizer here
     optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_alff.parameters()) + list(enc_falff.parameters()) + list(enc_reho.parameters()), lr=learning_rate)
-    scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=1e-5)
+    scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=5e-6)
 
     logger.info("All encoders has been defined!!")
-
-    if os.path.exists(model_path):
-       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
-       MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
-       SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
-       WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
-       LOSS_vals = read_metric_txt(f"{model_path}/losses_interim.txt")
-       ITERS = list(range(0, start_iter, 10))
-    else:
-       start_iter = 0
-       MI_vals = []
-       SIL_vals = []
-       WD_vals = []
-       ITERS = []
-       LOSS_vals = []
 
     # set the models in train mode
     enc_4D_rsdata.train()
