@@ -46,8 +46,10 @@ forward-pass loop over the ENIGMA multimodal dataloader to validate:
        output_dim of each encoder in this experiment
      argv[7]
        selector of RS_encoder 0: ResNet with Fusion, 1: ResNet with LSTM
+     argv[8]
+       constant temperature of SSL optimization - InfoNCE loss (contrastive)
 
- call it like this: python train.py 66 100 10 1e-4 1 128 1
+ call it like this: python train.py 66 100 10 1e-4 1 128 1 0.07
 
  Outputs:
     - Logs (via loguru) indicating successful reads and embedding computation.
@@ -76,18 +78,24 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import umap.umap_ as umap
 from sklearn.manifold import TSNE
 
+# import this for calculating metrics
+from scipy.stats import wasserstein_distance
+from sklearn.cluster import KMeans
+from sklearn.metrics import normalized_mutual_info_score, silhouette_score
+
 # import plotting tools
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from loguru import logger
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from pathlib import Path
 
 # get the dataloder and dataset definition here***
 from dataset_dataloder.ENIGMA_dataset_dataloder_creation_small import define_dataset_dataloader_ENIGMA
 
 # get the model definitions here***
-from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LSTM, ResNet3DEncoder
+from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LSTM, ResNet3DEncoder, LateFusion4DResNet_TemporalConv
 
 # import losses for SSL and alternative regularization
 from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
@@ -106,6 +114,168 @@ if torch.cuda.is_available():
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+
+# function for loading the latest checkpoint generated
+def load_latest_ckpt(
+    ckpt_dir: str,
+    device: torch.device,
+    enc_4D_rsdata,
+    enc_alff,
+    enc_falff,
+    enc_reho,
+    optimizer_SSL=None,
+    scheduler_SSL=None,
+):
+    ckpt_dir = Path(ckpt_dir)
+    ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
+
+    if len(ckpt_files) == 0:
+        raise FileNotFoundError(f"No checkpoint files found in: {ckpt_dir}")
+
+    latest = ckpt_files[-1]
+    logger.info(f"Loading latest checkpoint as {latest}")
+
+    ckpt = torch.load(latest, map_location=device)
+
+    # ---- models loading process here
+    enc_4D_rsdata.load_state_dict(ckpt["models"]["enc_4D_rsdata"], strict=True)
+    enc_alff.load_state_dict(ckpt["models"]["enc_alff"], strict=True)
+    enc_falff.load_state_dict(ckpt["models"]["enc_falff"], strict=True)
+    enc_reho.load_state_dict(ckpt["models"]["enc_reho"], strict=True)
+
+    # ---- optimizer / scheduler loading - necessary for replication
+    if optimizer_SSL is not None and "optimizer_SSL" in ckpt:
+        optimizer_SSL.load_state_dict(ckpt["optimizer_SSL"])
+
+    if scheduler_SSL is not None and "scheduler_SSL" in ckpt:
+        scheduler_SSL.load_state_dict(ckpt["scheduler_SSL"])
+
+    start_iter = int(ckpt.get("iter", 0)) + 1
+
+    return start_iter, str(latest)
+
+# function for reading the interim text files
+def read_metric_txt(path_str: str):
+    """
+      reading the txt \n separated values
+      for continuing with the training process
+    """
+    vals: list[float] = []
+    for line in Path(path_str).read_text().splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        vals.append(float(s))
+    return vals
+
+# function for plotting the interim metrics
+def plotting_twinx_variables(time_vector, data1, data2, title: str, x_label: str, y_label1: str, y_label2: str, folder_images: str, iter: int):
+    """
+    plot her twinx the variables you want to compare
+    across number of epochs in this case.
+
+    Plot two time series on twin y-axes and save.
+
+    Parameters
+    ----------
+    time_vector : array-like
+    data1, data2 : array-like
+        Series aligned to `time_vector`.
+    title, x_label, y_label1, y_label2 : str
+    folder_images : str
+    subj : str
+
+    Returns
+    -------
+    None
+    """
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax1.plot(time_vector, data1, "b-", label=y_label1, linewidth=3)
+    ax1.set_xlabel(x_label, fontsize=1)
+    ax1.set_ylabel(y_label1, color="blue", fontsize=16)
+    ax1.tick_params(axis="y", labelcolor="blue")
+
+    ax2 = ax1.twinx()
+
+    ax2.plot(time_vector, data2, "r-", label=y_label2, linewidth=3)
+    ax2.set_ylabel(y_label2, color="red", fontsize=16)
+    ax2.tick_params(axis="y", labelcolor="red")
+
+    ax1.grid(True)
+
+    for tick in ax1.get_xticklabels():
+        tick.set_fontsize(14)
+
+    plt.title(title)
+    fig.legend()
+    fig.savefig(f"{folder_images}/{y_label1}_{y_label2}_{iter}.jpg")
+    plt.close("all")
+
+# function for define the metrics here..
+def to_np(x: torch.Tensor) -> np.ndarray:
+    return x.detach().float().cpu().numpy()
+
+
+def wasserstein_avg_over_dims(A: np.ndarray, B: np.ndarray) -> float:
+    """
+    A, B: (B, D) arrays.
+    Computes 1D Wasserstein distance per dimension across the batch, then averages.
+    """
+    assert A.shape == B.shape, (A.shape, B.shape)
+    D = A.shape[1]
+    return float(np.mean([wasserstein_distance(A[:, d], B[:, d]) for d in range(D)]))
+
+
+def pairwise_wasserstein(embeds_np: dict) -> dict:
+    """
+    embeds_np: dict name -> (B,D)
+    returns dict (name_i, name_j) -> wasserstein distance
+    """
+    keys = list(embeds_np.keys())
+    out = {}
+    for i in range(len(keys)):
+        for j in range(i + 1, len(keys)):
+            ki, kj = keys[i], keys[j]
+            out[(ki, kj)] = wasserstein_avg_over_dims(embeds_np[ki], embeds_np[kj])
+    return out
+
+
+def stack_modalities(embeds_np: dict):
+    """
+    Returns:
+      X: (M*B, D)
+      modality_labels: (M*B,) integers 0..M-1
+    """
+    keys = list(embeds_np.keys())
+    X = np.concatenate([embeds_np[k] for k in keys], axis=0)
+    B = embeds_np[keys[0]].shape[0]
+    modality_labels = np.concatenate([np.full(B, i, dtype=int) for i in range(len(keys))], axis=0)
+    return X, modality_labels, keys
+
+
+def compute_nmi_via_kmeans(X: np.ndarray, true_labels: np.ndarray, n_clusters: int, seed: int = 42) -> float:
+    """
+    Cluster X, then compute NMI between cluster assignments and provided labels.
+    """
+    true_labels = np.asarray(true_labels)
+    uniq = np.unique(true_labels)
+    if uniq.size < 2:
+        return float("nan")  # or 0.0 if you prefer
+    km = KMeans(n_clusters=n_clusters, n_init="auto", random_state=seed)
+    pred = km.fit_predict(X)
+    return float(normalized_mutual_info_score(true_labels, pred))
+
+def compute_silhouette(X: np.ndarray, labels: np.ndarray, metric: str = "cosine") -> float:
+    """
+    Silhouette score for given labels.
+    With normalized embeddings, cosine is usually a good choice.
+    """
+    labels = np.asarray(labels)
+    uniq = np.unique(labels)
+    if uniq.size < 2:
+        return float("nan")  # or 0.0 if you prefer
+    return float(silhouette_score(X, labels, metric=metric))
 
 def make_subject_palette(subject_ids, palette_name="tab20"):
     """
@@ -218,10 +388,9 @@ def auto_padding(kernel, dilation=(1, 1, 1)):
     """
     return tuple(d * (k // 2) for k, d in zip(kernel, dilation, strict=False))
 
-def get_concat_embedding(rs_DATA, st_DATA, falff_reho_DATA,
+def get_concat_embedding(rs_DATA, falff_reho_DATA,
                         enc_alff, enc_falff, enc_reho,
-                        enc_surf, enc_thick, enc_vol,
-                        enc_4D_rsdata):
+                        enc_4D_rsdata, batch_sizes):
     """
       get all the embeddings from each iteration here
       project all the data with the models trained after that
@@ -229,22 +398,37 @@ def get_concat_embedding(rs_DATA, st_DATA, falff_reho_DATA,
     out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
     out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
     out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-    out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
-    out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-    out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
+    # out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
+    # out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+    # out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
 
     rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
     RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
     out_rs = enc_4D_rsdata(RSDATA)
 
     embeds_all = {
-        "alff": out_alff, "falff": out_falff, "reho": out_reho,
-        "surf": out_surf, "thick": out_thick, "vol": out_vol, "rs": out_rs
+        "alff": out_alff, "falff": out_falff, "reho": out_reho, "rs": out_rs
     }
     embeds_all = {k: F.normalize(v, dim=1) for k, v in embeds_all.items()}
 
-    z = torch.cat([embeds_all[k] for k in ["alff","falff","reho","surf","thick","vol","rs"]], dim=1)
-    return z, embeds_all
+    # stack this in to_np way
+    embeds_np = {k: to_np(v) for k, v in embeds_all.items()}
+
+    wd = pairwise_wasserstein(embeds_np)
+
+    X_all, mod_labels, mod_keys = stack_modalities(embeds_np)
+
+    val_clust = np.tile(np.arange(batch_sizes), 4)
+
+    if len(val_clust) > 1:
+       sil_mod = compute_silhouette(X_all, val_clust, metric="cosine")
+       nmi_mod = compute_nmi_via_kmeans(X_all, val_clust, n_clusters=batch_sizes)
+    else:
+       sil_mod = np.nan
+       nmi_mod = np.nan
+
+    z = torch.cat([embeds_all[k] for k in ["alff","falff","reho","rs"]], dim=1)
+    return z, wd, sil_mod, nmi_mod, embeds_all
 
 ## get the UMAP and tSNE projections here..
 def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
@@ -252,11 +436,11 @@ def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
       get the UMAP and TSNE projects
       given the eval embeddings
     """
-    umap_map = umap.UMAP(n_neighbors=5, min_dist=0.1, n_components=proj_components, random_state=42, verbose=True, metric="euclidean")
+    umap_map = umap.UMAP(n_neighbors=5, min_dist=0.1, spread=3.0, n_components=proj_components, random_state=42, verbose=True, metric="euclidean")
     # take into account these values are concat projections of ndim values
     # reshape here the input values here
     Z_stacked = np.vstack(Z)
-    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 7, ndim)
+    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 4, ndim)
     Z_final = Z_reshaped.reshape(-1, ndim)
     umap_proj = umap_map.fit_transform(Z_final)
 
@@ -280,7 +464,7 @@ def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modali
     None
     """
 
-    markers=["o", "X", "s", "P", "^", "v", "D"]
+    markers=["o", "X", "s", "D"]
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=proj_feat[:, 0], y=proj_feat[:, 1], hue=sub_labels, hue_order=subject_order, style=modalities, markers=markers, palette=subject_palette, s=180, edgecolor="k", alpha=0.7, legend=False)
     plt.title(title)
@@ -305,9 +489,10 @@ if __name__ == "__main__":
     loss_selector = int(sys.argv[5])
     out_dim = int(sys.argv[6])
     rs_data_model_sel = int(sys.argv[7])
+    temperature = float(sys.argv[8])
 
-    model_path = f"./models/folder_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}"
-    vis_path = f"./visualization/folder_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}"
+    model_path = f"./models/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    vis_path = f"./visualization/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
     # Define here the models and plot folders for interim results visualization
     if not  os.path.exists(model_path):
        os.makedirs(model_path, exist_ok=True)
@@ -475,7 +660,7 @@ if __name__ == "__main__":
            out_dim=out_dim,
            pretrained=False,
        )
-    else:
+    elif rs_data_model_sel == 1:
        enc_4D_rsdata = LateFusion4DResNet_LSTM(
            n_streams=time_samples,
            emb_dim=out_dim*2,
@@ -485,30 +670,57 @@ if __name__ == "__main__":
            lstm_hidden=int(out_dim/2),
            lstm_layers=2,
            bidirectional=True,
-           lstm_dropout= 0.5,
-           pool= "last",            # "last" | "mean"
+           lstm_dropout= 0.75,
+           pool= "mean",            # "last" | "mean"
+           out_dim_final=out_dim,
+       )
+    else:
+       enc_4D_rsdata = LateFusion4DResNet_TemporalConv(
+           n_streams=time_samples,
+           emb_dim=out_dim*2,
+           out_dim=out_dim,            # per-branch output channels C
+           pretrained=False,
+           kernel_size=5,
+           n_blocks=4,
+           hidden_channels=100,
+           dilation_growth=2,
+           attention_projection=True,
+           attn_heads=1,
+           pool="mean",
            out_dim_final=out_dim,
        )
 
     # initialize weights models
-    for model in [enc_4D_rsdata, enc_alff, enc_falff, enc_reho, enc_vol, enc_surf, enc_thick]:
+    for model in [enc_4D_rsdata, enc_alff, enc_falff, enc_reho]:
         model.to(device)
         model.apply(lambda m: init_xavier(m, uniform=True))
 
     # define the optimizer here
-    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_alff.parameters()) + list(enc_falff.parameters()) + list(enc_reho.parameters()) + list(enc_vol.parameters()) + list(enc_surf.parameters()) + list(enc_thick.parameters()), lr=learning_rate)
+    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_alff.parameters()) + list(enc_falff.parameters()) + list(enc_reho.parameters()), lr=learning_rate)
     scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=1e-5)
 
     logger.info("All encoders has been defined!!")
+
+    if os.path.exists(model_path):
+       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
+       MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
+       SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
+       WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
+       LOSS_vals = read_metric_txt(f"{model_path}/losses_interim.txt")
+       ITERS = list(range(0, start_iter, 10))
+    else:
+       start_iter = 0
+       MI_vals = []
+       SIL_vals = []
+       WD_vals = []
+       ITERS = []
+       LOSS_vals = []
 
     # set the models in train mode
     enc_4D_rsdata.train()
     enc_alff.train()
     enc_falff.train()
     enc_reho.train()
-    enc_vol.train()
-    enc_surf.train()
-    enc_thick.train()
 
     # GET HERE THE DATALODERS WITH THE PROJECTED IMAGES AND DIFFERENT MODALITIES - TAKING INTO ACCOUNT 21 DIFFERENT PAIRS
     # read the dataloder object here. Take 200s for all the trials/subjects here
@@ -530,7 +742,7 @@ if __name__ == "__main__":
     else:
        logger.info("Using SSL loss across ALL the modalities")
 
-    for iter in range(0, iterations):
+    for iter in range(start_iter, iterations):
 
         # check if the dataloader works
         idx_sample = []
@@ -568,9 +780,9 @@ if __name__ == "__main__":
             out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
             out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
             out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-            out_surf = enc_surf(st_DATA[0].unsqueeze(1))
-            out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-            out_vol = enc_vol(st_DATA[2].unsqueeze(1))
+            #out_surf = enc_surf(st_DATA[0].unsqueeze(1))
+            #out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+            #out_vol = enc_vol(st_DATA[2].unsqueeze(1))
             # create the list of tensor the 4D image timesamples. Do this permutation before transforming the tensor to a list of tensors!!
             rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
             RSDATA = [rs_DATA[:, t] for t in range(rs_DATA.shape[1])]
@@ -580,9 +792,6 @@ if __name__ == "__main__":
               "alff":  out_alff,    # (B,D)
               "falff": out_falff,   # (B,D)
               "reho":  out_reho,    # (B,D)
-              "surf":  out_surf,    # (B,D)
-              "thick": out_thick,   # (B,D)
-              "vol":   out_vol,     # (B,D)
               "rs":    out_rsdata,  # (B,D)
             }
 
@@ -591,9 +800,9 @@ if __name__ == "__main__":
 
             # define and update the loss here. Use the current embeddings to calculate the loss but NOT the ones for the clustering representation
             if loss_selector == 0:
-               loss_SSL = multimodal_pairwise_clip_loss(embeds=embeds_all, temperature=0.07)
+               loss_SSL = multimodal_pairwise_clip_loss(embeds=embeds_all, temperature=temperature)
             else:
-               loss_SSL = multimodal_multipositive_infonce_whole(embeds=embeds_all, temperature=0.07)
+               loss_SSL = multimodal_multipositive_infonce_whole(embeds=embeds_all, temperature=temperature)
 
             loss_interim.append(loss_SSL)
 
@@ -618,13 +827,16 @@ if __name__ == "__main__":
         mean_loss_value = mean_loss.item()
         logger.info(f"Training iteration {iter} with loss: {mean_loss_value}..")
 
-        models = [enc_4D_rsdata, enc_alff, enc_falff, enc_reho, enc_vol, enc_surf, enc_thick]
+        models = [enc_4D_rsdata, enc_alff, enc_falff, enc_reho] # enc_vol, enc_surf, enc_thick]
         # processing the projected embeddings in eval mode
         # ---- END OF EPOCH: EMBEDDING SNAPSHOT IN EVAL MODE ----
         # (optional: only every few epochs)
         Z_vals = []
         sites_evals = []
         subs_evals = []
+        mi_vals = []
+        sil_vals = []
+        wd_vals = []
 
         if iter == 0 or iter % 10 == 0:
            prev_modes = [m.training for m in models]
@@ -640,28 +852,55 @@ if __name__ == "__main__":
                    sampling_index_eval, time_subject_eval, TRs_eval) = batch_data_eval
 
                    rs_DATA_eval = rs_DATA_eval.to(device, non_blocking=True)
-                   st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
+                   # st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
                    falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
 
-                   z, _ = get_concat_embedding(
-                      rs_DATA_eval, st_DATA_eval, falff_reho_DATA_eval,
+                   z, wd, sil, nmi, _ = get_concat_embedding(
+                      rs_DATA_eval, falff_reho_DATA_eval,
                       enc_alff, enc_falff, enc_reho,
-                      enc_surf, enc_thick, enc_vol,
-                      enc_4D_rsdata
+                      enc_4D_rsdata, len(idx_eval)
                    )
 
                    Z_vals.append(z.detach().cpu().numpy())
                    sites_evals.append(sites_idx_eval)
                    subs_evals.append(subject_index_eval)
 
+                   mi_vals.append(nmi)
+                   sil_vals.append(sil)
+                   wd_vals.append(sum(wd.values()) / len(wd))
+
            # get UMAP and t-SNE projections
            umap_projections = get_UMAP_tSNE_projections(Z=Z_vals, proj_components=2, ndim=out_dim)
-           modality_ids = np.tile(np.arange(7), np.vstack(Z_vals).shape[0])
+           modality_ids = np.tile(np.arange(4), np.vstack(Z_vals).shape[0])
            subs_evals = [str(s) for sublist in subs_evals for s in sublist]
            subs_evals = np.array(subs_evals)  # convert list → array
-           subs_evals_long = np.repeat(subs_evals, 7)
+           subs_evals_long = np.repeat(subs_evals, 4)
 
-           if iter == 0:
+           MI_vals.append(np.nanmean(np.array(mi_vals)))
+           SIL_vals.append(np.nanmean(np.array(sil_vals)))
+           WD_vals.append(np.nanmean(np.array(wd_vals)))
+           LOSS_vals.append(mean_loss_value)
+           ITERS.append(iter)
+
+           ## append the values in the last part of the metrics file
+           with open(f"{model_path}/mutual_information_interim.txt", "a") as f_mi:
+              f_mi.write(str(np.nanmean(np.array(mi_vals))) + '\n')
+           with open(f"{model_path}/wasserstein_distance_interim.txt", "a") as f_wd:
+              f_wd.write(str(np.nanmean(np.array(wd_vals))) + '\n')
+           with open(f"{model_path}/silhoutte_interim.txt", "a") as f_sil:
+              f_sil.write(str(np.nanmean(np.array(sil_vals))) + '\n')
+           with open(f"{model_path}/losses_interim.txt", "a") as f_loss:
+              f_loss.write(str(mean_loss_value) + '\n')
+
+           # plotting the metrics here
+           logger.info("Plotting metrics for iteration {iter}!!")
+           plotting_twinx_variables(np.array(ITERS), np.array(LOSS_vals), np.array(MI_vals), title=f"SSL loss and MI", x_label="epochs", y_label1="SSL Loss", y_label2="NMI", folder_images=vis_path, iter=iter)
+           plotting_twinx_variables(np.array(ITERS), np.array(LOSS_vals), np.array(SIL_vals), title=f"SSL loss and Silhoutte", x_label="epochs", y_label1="SSL Loss", y_label2="Silhoutte", folder_images=vis_path, iter=iter)
+           plotting_twinx_variables(np.array(ITERS), np.array(LOSS_vals), np.array(WD_vals), title=f"SSL loss and Wasserstein Distance", x_label="epochs", y_label1="SSL Loss", y_label2="Wasserstein Distance", folder_images=vis_path, iter=iter)
+           plotting_twinx_variables(np.array(ITERS), np.array(MI_vals), np.array(WD_vals), title=f"MI and Wasserstein Distance", x_label="epochs", y_label1="NMI", y_label2="Wasserstein Distance", folder_images=vis_path, iter=iter)
+           plotting_twinx_variables(np.array(ITERS), np.array(MI_vals), np.array(SIL_vals), title=f"MI and Silhoutte", x_label="epochs", y_label1="NMI", y_label2="Silhoutte", folder_images=vis_path, iter=iter)
+
+           if iter == 0 or iter == start_iter + 9:
               subject_order = sorted(np.unique(subs_evals_long).tolist())
               subject_palette = make_subject_palette(subject_order, palette_name="tab20")
 
@@ -683,9 +922,6 @@ if __name__ == "__main__":
                    "enc_alff": enc_alff.state_dict(),
                    "enc_falff": enc_falff.state_dict(),
                    "enc_reho": enc_reho.state_dict(),
-                   "enc_vol": enc_vol.state_dict(),
-                   "enc_surf": enc_surf.state_dict(),
-                   "enc_thick": enc_thick.state_dict(),
                 },
                 "optimizer_SSL": optimizer_SSL.state_dict(),
                 "scheduler_SSL": scheduler_SSL.state_dict(),
@@ -693,3 +929,4 @@ if __name__ == "__main__":
 
            torch.save(ckpt, ckpt_path)
            logger.success(f"Saving checkpoint for iteration {iter}!!")
+
