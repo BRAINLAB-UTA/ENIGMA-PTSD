@@ -59,14 +59,14 @@ logger.add("report_final_excluded_subjects.log", format=FMT, colorize=True)
 
 
 # define here the paths for reading the data coming for each subject and site
-RSdata_folder = "../../Data/RSData/"
-npz_folder = "../../Data/npz"
-npy_folder = "../../Data/npy"
+RSdata_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/RSData/"
+npz_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/npz"
+npy_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/npy"
 
 structural_npz_folder = f"{npz_folder}/structural"
 falff_reho_npz_folder = f"{npz_folder}/falff_reho_3d"
 
-subject_indices_current_data = "../../Data/npz/subjects_overlaped_all_modalities.npz"
+subject_indices_current_data = "/home/mayortorresjm/ENIGMA-PTSD/Data/npz/subjects_overlaped_all_modalities.npz"
 
 DATA_structural = []
 DATA_falff_reho = []
@@ -76,6 +76,31 @@ SUB = []
 # plot the histogram with defined values
 
 # define a function to skip the files that doesnt exist in the RSData part
+
+
+# define the normalization as transformations
+class ZScore3D:
+    def __init__(self, eps=1e-6):
+        self.eps = eps
+    def __call__(self, x):
+        # x: (1,D,H,W) or (D,H,W)
+        m = x.mean()
+        s = x.std()
+        return (x - m) / (s + self.eps)
+
+class ZScore4DPerFrame:
+    def __init__(self, eps: float = 1e-6):
+        self.eps = eps
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim != 4:
+            raise ValueError(f"Expected x shape (D,H,W,T). Got {tuple(x.shape)}")
+
+        # Mean/std over spatial dims per frame: reduce over D,H,W (dims 1,2,3)
+        mean = x.mean(axis=(0, 1, 2), keepdims=True)  # (1,1,1,1,T)
+        std  = x.std(axis=(0, 1, 2), keepdims=True)  # (1,1,1,1,T)
+
+        return (x - mean) / (std + self.eps)
 
 
 def plot_histogram(
@@ -132,13 +157,17 @@ def plot_histogram(
             xx,
             normal_counts,
             linewidth=2,
-            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+            label=f"Normal fit (μ={
+                mu:.3g}, σ={
+                sigma:.3g})")
     else:
         ax.plot(
             xx,
             normal_pdf,
             linewidth=2,
-            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+            label=f"Normal fit (μ={
+                mu:.3g}, σ={
+                sigma:.3g})")
     ax.grid()
     ax.set_xlabel(x_string)
     ax.set_ylabel(y_string)
@@ -210,6 +239,8 @@ class StreamPairs(Dataset):
         rs_stride=4,
         st_stride=4,
         falff_stride=3,
+        transform_3d=None,
+        transform_4d=None
     ):
         """
         Initialize the dataset and (optionally) preload per-site NPZ containers.
@@ -230,7 +261,7 @@ class StreamPairs(Dataset):
         """
 
         # read here the TR_vals
-        with open("../../Data/npz/TR_vals.pkl", "rb") as file_TRs:
+        with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npz/TR_vals.pkl", "rb") as file_TRs:
             self.tr_vals = pickle.load(file_TRs)
 
         # define here the initialization parameters
@@ -255,6 +286,8 @@ class StreamPairs(Dataset):
         self.rs_stride = rs_stride
         self.st_stride = st_stride
         self.falff_stride = falff_stride
+        self.transform_3d = transform_3d
+        self.transform_4d = transform_4d
 
         self.st_DATA = []
         self.rs_window_crop = rs_window_crop
@@ -267,8 +300,8 @@ class StreamPairs(Dataset):
         self.sites_all = self.subject_sites["sites_all"]
 
         if not os.path.exists(
-            "../../Data/npy/structural_npys_all.npy"
-        ) and not os.path.exists("../../Data/npy/falff_reho_npys_all.npy"):
+            "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy"
+        ) and not os.path.exists("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy"):
             # read the files as list and save it as npys if necessary
             logger.info("Reading structural Data for all sites!!")
 
@@ -299,18 +332,19 @@ class StreamPairs(Dataset):
                 self.st_subjects.append(
                     self.st_data_site["subjects"][:, 1].tolist())
                 logger.info(
-                    f"Read structural for site {self.sites[index_sites]}")
+                    f"Read structural for site {
+                        self.sites[index_sites]}")
 
             # saving the st variables firt to do the del afterwards
             self.st_DATA = np.array(
                 self.st_DATA, dtype=object)  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/structural_npys_all.npy",
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy",
                 self.st_DATA,
                 allow_pickle=True,
             )
             # write the pickle directory here
-            with open("../../Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
                 pickle.dump(self.st_subjects, file_structural)
 
             # delete this temporary values to save RAM memory and keep speed
@@ -356,7 +390,8 @@ class StreamPairs(Dataset):
                     self.falff_reho_data_site["subjects"][:, 1].tolist()
                 )
                 logger.info(
-                    f"Read falff_reho for site {self.sites[index_sites]}")
+                    f"Read falff_reho for site {
+                        self.sites[index_sites]}")
 
             # save the interim files as npy for not reading them again using
 
@@ -364,13 +399,13 @@ class StreamPairs(Dataset):
                 self.falff_reho_DATA, dtype=object
             )  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/falff_reho_npys_all.npy",
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy",
                 self.falff_reho_DATA,
                 allow_pickle=True,
             )
 
             # write the pickle directory here
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
                 pickle.dump(self.falff_subjects, file_falff)
 
             del self.falff_reho_data_site, self.falff_reho_DATA
@@ -380,18 +415,18 @@ class StreamPairs(Dataset):
             # measure how it takes reading the files
             logger.info("Reading pre-saved dataset!!")
             self.falff_reho_DATA = np.load(
-                "../../Data/npy/falff_reho_npys_all.npy", allow_pickle=True
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy", allow_pickle=True
             )
             self.st_DATA = np.load(
-                "../../Data/npy/structural_npys_all.npy", allow_pickle=True
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy", allow_pickle=True
             )
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
                 self.falff_subjects = pickle.load(file_alff)
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
                 self.st_subjects = pickle.load(file_structural)
 
             logger.info("Reading finalized!!")
@@ -681,12 +716,12 @@ class StreamPairs(Dataset):
         # take the length of each subject for plotting histogram lengths
         time_length = float(rs_img.dataobj.shape[3] / fs_current)
 
-        # take the length of each subject for plotting histogram lengths
-        time_length = float(rs_img.dataobj.shape[3] / fs_current)
         if time_length <= 200:
             # print this in the report to check the ids for the shorter trials
             logger.error(
-                f"The data length is very short and its length is {time_length} secs for subject {self.subject_sites['subjects_rs'][idx]} and site {self.sites_all[idx]}")
+                f"The data length is very short and its length is {time_length} secs for subject {
+                    self.subject_sites['subjects_rs'][idx]} and site {
+                    self.sites_all[idx]}")
             # skip this subject because it is too short to take enough time
             # information
             return None
@@ -719,8 +754,16 @@ class StreamPairs(Dataset):
         # :])[..., new_index[0:self.rs_window_crop]]
 
         logger.info(
-            f"Current TR is {self.tr_vals[self.sites_all[idx]]} and target TR is {self.tr_vals['max']}.The new 4D array resampled has {len(new_index[0 : self.rs_window_crop])} samples in time and original resample is {len(new_index)} with samples {new_index[0 : self.rs_window_crop]}, the idx of the original time-series is {idxs_vals}, time_length per subject is {time_length}"
-        )
+            f"Current TR is {
+                self.tr_vals[
+                    self.sites_all[idx]]} and target TR is {
+                self.tr_vals['max']}.The new 4D array resampled has {
+                    len(
+                        new_index[
+                            0: self.rs_window_crop])} samples in time and original resample is {
+                                len(new_index)} with samples {
+                                    new_index[
+                                        0: self.rs_window_crop]}, the idx of the original time-series is {idxs_vals}, time_length per subject is {time_length}")
 
         # replacing the suffixes of st_subjects here before comparing
         if self.sites_all[idx] == "UMN":
@@ -778,9 +821,20 @@ class StreamPairs(Dataset):
 
         logger.info(
             f"RS index {subject_index_rs} and ST index {subject_index_st}, for subject {
-                self.falff_subjects[index_site][subject_index_rs]
-            } in rs, and subject {self.st_subjects[index_site][subject_index_st]} in st"
-        )
+                self.falff_subjects[index_site][subject_index_rs]} in rs, and subject {
+                self.st_subjects[index_site][subject_index_st]} in st")
+
+        # normalize here the data before releasing it
+        if self.transform_3d is not None:
+           falff_reho_data_input[0] = self.transform_3d(falff_reho_data_input[0])
+           falff_reho_data_input[1] = self.transform_3d(falff_reho_data_input[1])
+           falff_reho_data_input[2] = self.transform_3d(falff_reho_data_input[2])
+           st_data_input[0] = self.transform_3d(st_data_input[0])
+           st_data_input[1] = self.transform_3d(st_data_input[1])
+           st_data_input[2] = self.transform_3d(st_data_input[2])
+
+        if self.transform_4d is not None:
+           rs_data = self.transform_4d(rs_data)
 
         # return the tuple with the values corresponding with the same subject
         # information
@@ -797,7 +851,11 @@ class StreamPairs(Dataset):
         )
 
 
-def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
+def define_dataset_dataloader_ENIGMA(
+        subject_indices_current_data: str,
+        batch_size: int = 10,
+        rs_time_window: int = 200,
+        rs_window_crop: int = 56):
     """
     Construct the ENIGMA StreamPairs dataset and a PyTorch DataLoader.
 
@@ -813,6 +871,9 @@ def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
        data_loader_all: A PyTorch DataLoader object yielding multimodal batches suitable for training/eval. For the SSL section ** For now
     """
 
+    norm3d = ZScore3D()
+    norm4d = ZScore4DPerFrame()
+
     # define the dataset here and invoke the initialization call
     subject_sites = np.load(subject_indices_current_data)
     dataset_all = StreamPairs(
@@ -820,11 +881,13 @@ def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
         rs_path=RSdata_folder,
         st_path=structural_npz_folder,
         falff_reho_path=falff_reho_npz_folder,
-        rs_time_window=200,
-        rs_window_crop=56,
+        rs_time_window=rs_time_window,
+        rs_window_crop=rs_window_crop,
+        transform_3d=norm3d,
+        transform_4d=norm4d,
     )  # don't increase rs_window_crop more than 56***
 
-    current_batch_size = 10
+    current_batch_size = batch_size
 
     # define the Dataloder here
     data_loader_all = DataLoader(
@@ -844,7 +907,6 @@ if __name__ == "__main__":
     """
       **Main section of the code**
     """
-
     # read the dataloder object here
     data_loader_all = define_dataset_dataloader_ENIGMA(
         subject_indices_current_data=subject_indices_current_data
@@ -884,11 +946,11 @@ if __name__ == "__main__":
     end_time = time.time()
 
     logger.info(
-        f"dataloader final time reading after decimation {end_time - start_time} s")
+        f"dataloader final time reading after decimation {
+            end_time - start_time} s")
     logger.info(f"subjects with all modalities {len(torch.cat(idx_sample))}")
     logger.info(
-        f"data from sites {sites_unique} are taking into account in this dataloader"
-    )
+        f"data from sites {sites_unique} are taking into account in this dataloader")
 
     # convert the report here defined in the loguru configuration above
     # coloured

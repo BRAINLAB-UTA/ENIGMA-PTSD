@@ -19,13 +19,16 @@ import time
 import re
 import warnings
 import matplotlib.pyplot as plt
+import shutil
 
 import nibabel as nib
 import numpy as np
 import torch
+from itertools import chain
 from ansi2html import Ansi2HTMLConverter
 from loguru import logger
 from torch.utils.data import DataLoader, Dataset
+from pathlib import Path
 
 # define this to skip unexistent data
 from torch.utils.data.dataloader import default_collate
@@ -59,24 +62,107 @@ logger.add("report_final_excluded_subjects.log", format=FMT, colorize=True)
 
 
 # define here the paths for reading the data coming for each subject and site
-RSdata_folder = "../../Data/RSData/"
-npz_folder = "../../Data/npz"
-npy_folder = "../../Data/npy"
+RSdata_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/RSData/"
+npz_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/npz"
+npy_folder = "/home/mayortorresjm/ENIGMA-PTSD/Data/npy"
 
 structural_npz_folder = f"{npz_folder}/structural"
 falff_reho_npz_folder = f"{npz_folder}/falff_reho_3d"
 
-subject_indices_current_data = "../../Data/npz/subjects_overlaped_all_modalities.npz"
+subject_indices_current_data = "/home/mayortorresjm/ENIGMA-PTSD/Data/npz/subjects_overlaped_all_modalities.npz"
 
 DATA_structural = []
 DATA_falff_reho = []
 SITES = []
 SUB = []
 
+# creates a copy of all the content with the new suffixes here
+def copy_content_with_new_suffix(source_folder, dest_folder, old, new, modality):
+    """
+      copy all the content of the files in a folder to another
+      changing the suffixes accordingly based  on an unified name
+    """
+    if not os.path.exists(dest_folder):
+       os.makedirs(dest_folder, exist_ok=False)
+       os.makedirs(dest_folder + '/anat')
+       os.makedirs(dest_folder + '/func')
+       os.makedirs(dest_folder + '/falff_reho')
+
+    # continue the code here.
+    if modality == "st":
+       dest_folder = dest_folder + "/anat/"
+    elif modality == "falff_reho":
+       dest_folder = dest_folder + "/falff_reho/"
+    else:
+       dest_folder = dest_folder + "/func/"
+
+    src, dst = Path(source_folder), Path(dest_folder)
+
+    for ppath in chain(src.rglob("*.json"), src.rglob("*.tsv"), src.rglob("*.nii.gz")):
+       if ppath.is_file():
+           out_p = dst / ppath.relative_to(src).as_posix().replace(old, new)
+           out_p.parent.mkdir(parents=True, exist_ok=True)
+           shutil.copy2(ppath, out_p)
+
+    logger.info(f"{src} folder has been copied to {dst}!!")
+
+# validate data for the case of copying
+def validate_data_copy(rs_data_path_1: str, rs_data_path_2: str, subject_str: str, new: str, old: str, new_directory: str, site: str, prev_subj: str):
+     """
+        validate the existance of data and copy the data on BIDS format
+        With anat and func format per site and inside the new location of new data folder
+     """
+     if os.path.exists(rs_data_path_1.rsplit('/',1)[0]):
+        if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')):
+           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')
+           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
+        if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
+           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+        if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)):
+           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)
+           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
+
+        copy_content_with_new_suffix(rs_data_path_1.rsplit('/',1)[0], f"{new_directory}/{new}/", old, new, "rs")
+
+     if os.path.exists(rs_data_path_2.rsplit('/',1)[0]):
+        if os.path.exists(rs_data_path_2.rsplit('/',1)[0].replace('RSData','Structural')):
+           path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','Structural')
+           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
+        if os.path.exists(rs_data_path_2.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
+           path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+
+     # breakpoint()
+
 # plot the histogram with defined values
 
 # define a function to skip the files that doesnt exist in the RSData part
 
+# define the normalization as transformations
+class ZScore3D:
+    def __init__(self, eps=1e-6):
+        self.eps = eps
+    def __call__(self, x):
+        # x: (1,D,H,W) or (D,H,W)
+        m = x.mean()
+        s = x.std()
+        return (x - m) / (s + self.eps)
+
+class ZScore4DPerFrame:
+    def __init__(self, eps: float = 1e-6):
+        self.eps = eps
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+
+        if x.ndim != 4:
+            raise ValueError(f"Expected x shape (D,H,W,T). Got {tuple(x.shape)}")
+
+        # Mean/std over spatial dims per frame: reduce over D,H,W (dims 1,2,3)
+        mean = x.mean(axis=(0, 1, 2), keepdims=True)  # (1,1,1,1,T)
+        std  = x.std(axis=(0, 1, 2), keepdims=True)  # (1,1,1,1,T)
+
+        return (x - mean) / (std + self.eps)
 
 def plot_histogram(
         data,
@@ -132,25 +218,27 @@ def plot_histogram(
             xx,
             normal_counts,
             linewidth=2,
-            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+            label=f"Normal fit (μ={
+                mu:.3g}, σ={
+                sigma:.3g})")
     else:
         ax.plot(
             xx,
             normal_pdf,
             linewidth=2,
-            label=f"Normal fit (μ={mu:.3g}, σ={sigma:.3g})")
+            label=f"Normal fit (μ={
+                mu:.3g}, σ={
+                sigma:.3g})")
     ax.grid()
     ax.set_xlabel(x_string)
     ax.set_ylabel(y_string)
     # ax.set_title(title)
     fig.tight_layout()
     if counts_show is True:
-        fig.savefig(f"./histogram_{x_string}_counts.jpg")
+        fig.savefig(f"./histogram_{x_string}_counts_small.jpg")
     else:
-        fig.savefig(f"./histogram_{x_string}.jpg")
+        fig.savefig(f"./histogram_{x_string}_small.jpg")
     plt.close("all")
-
-# This will handle the None returning
 
 
 def collate_drop_none(batch):
@@ -212,6 +300,10 @@ class StreamPairs(Dataset):
         rs_stride=4,
         st_stride=4,
         falff_stride=3,
+        transform_3d=None,
+        transform_4d=None,
+        verbose=True,
+        copy_data=False
     ):
         """
         Initialize the dataset and (optionally) preload per-site NPZ containers.
@@ -232,7 +324,7 @@ class StreamPairs(Dataset):
         """
 
         # read here the TR_vals
-        with open("../../Data/npz/TR_vals.pkl", "rb") as file_TRs:
+        with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npz/TR_vals.pkl", "rb") as file_TRs:
             self.tr_vals = pickle.load(file_TRs)
 
         # define here the initialization parameters
@@ -257,6 +349,10 @@ class StreamPairs(Dataset):
         self.rs_stride = rs_stride
         self.st_stride = st_stride
         self.falff_stride = falff_stride
+        self.transform_3d = transform_3d
+        self.transform_4d = transform_4d
+        self.verbose = verbose
+        self.copy_data = copy_data
 
         self.st_DATA = []
         self.rs_window_crop = rs_window_crop
@@ -268,9 +364,16 @@ class StreamPairs(Dataset):
         self.sites = list(dict.fromkeys(self.subject_sites["sites_all"]))
         self.sites_all = self.subject_sites["sites_all"]
 
+
+        # create te data copy folder with the corresponding file structure here
+        if self.copy_data is True:
+           if not os.path.exists("/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/"):
+              os.makedirs("/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/", exist_ok=False)
+              os.makedirs("/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/Structural/", exist_ok=False)
+
         if not os.path.exists(
-            "../../Data/npy/structural_npys_all.npy"
-        ) and not os.path.exists("../../Data/npy/falff_reho_npys_all.npy"):
+            "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy"
+        ) and not os.path.exists("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy"):
             # read the files as list and save it as npys if necessary
             logger.info("Reading structural Data for all sites!!")
 
@@ -301,18 +404,19 @@ class StreamPairs(Dataset):
                 self.st_subjects.append(
                     self.st_data_site["subjects"][:, 1].tolist())
                 logger.info(
-                    f"Read structural for site {self.sites[index_sites]}")
+                    f"Read structural for site {
+                        self.sites[index_sites]}")
 
             # saving the st variables firt to do the del afterwards
             self.st_DATA = np.array(
                 self.st_DATA, dtype=object)  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/structural_npys_all.npy",
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy",
                 self.st_DATA,
                 allow_pickle=True,
             )
             # write the pickle directory here
-            with open("../../Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_structural_pkl.pkl", "wb") as file_structural:
                 pickle.dump(self.st_subjects, file_structural)
 
             # delete this temporary values to save RAM memory and keep speed
@@ -358,7 +462,8 @@ class StreamPairs(Dataset):
                     self.falff_reho_data_site["subjects"][:, 1].tolist()
                 )
                 logger.info(
-                    f"Read falff_reho for site {self.sites[index_sites]}")
+                    f"Read falff_reho for site {
+                        self.sites[index_sites]}")
 
             # save the interim files as npy for not reading them again using
 
@@ -366,13 +471,13 @@ class StreamPairs(Dataset):
                 self.falff_reho_DATA, dtype=object
             )  # (N_total, X, Y, Z)
             np.save(
-                "../../Data/npy/falff_reho_npys_all.npy",
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy",
                 self.falff_reho_DATA,
                 allow_pickle=True,
             )
 
             # write the pickle directory here
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_falff_reho_pkl.pkl", "wb") as file_falff:
                 pickle.dump(self.falff_subjects, file_falff)
 
             del self.falff_reho_data_site, self.falff_reho_DATA
@@ -382,18 +487,18 @@ class StreamPairs(Dataset):
             # measure how it takes reading the files
             logger.info("Reading pre-saved dataset!!")
             self.falff_reho_DATA = np.load(
-                "../../Data/npy/falff_reho_npys_all.npy", allow_pickle=True
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/falff_reho_npys_all.npy", allow_pickle=True
             )
             self.st_DATA = np.load(
-                "../../Data/npy/structural_npys_all.npy", allow_pickle=True
+                "/home/mayortorresjm/ENIGMA-PTSD/Data/npy/structural_npys_all.npy", allow_pickle=True
             )
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_falff_reho_pkl.pkl", "rb") as file_alff:
                 self.falff_subjects = pickle.load(file_alff)
 
             # read the subjects here using pickle load
-            with open("../../Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
+            with open("/home/mayortorresjm/ENIGMA-PTSD/Data/npy/sub_structural_pkl.pkl", "rb") as file_structural:
                 self.st_subjects = pickle.load(file_structural)
 
             logger.info("Reading finalized!!")
@@ -455,8 +560,11 @@ class StreamPairs(Dataset):
             + "_brainnetome_4d_mni_image_small.nii.gz"
         )
 
-        # do the validation in the first part
+
         index_site = self.sites.index(self.sites_all[idx])
+
+        prev_subject = self.st_subjects[index_site]
+
         # replacing the suffixes of st_subjects here before comparing
         if self.sites_all[idx] == "UMN":
             self.st_subjects[index_site] = [
@@ -475,23 +583,32 @@ class StreamPairs(Dataset):
                 s.replace("Episca", "S") for s in self.st_subjects[index_site]
             ]
 
+        # get this values by default here ** they will be modified in any case
+        new_subj = self.subject_sites["subjects_rs"][idx]
+        old_subj = self.subject_sites["subjects_rs"][idx]
+        subj_str = self.subject_sites["subjects_rs"][idx]
+
         # do this validation as first to avoid problems with other sites
         if self.sub_rs[idx] in self.st_subjects[index_site]:
             subject_index_st = self.st_subjects[index_site].index(
                 self.subject_sites["subjects_rs"][idx]
             )
+            subject_old = prev_subject[subject_index_st]
         if self.sub_st[idx] in self.st_subjects[index_site]:
             subject_index_st = self.st_subjects[index_site].index(
                 self.subject_sites["subjects_st"][idx]
             )
+            subject_old = prev_subject[subject_index_st]
         if self.sub_rs[idx] in self.falff_subjects[index_site]:
             subject_index_rs = self.falff_subjects[index_site].index(
                 self.subject_sites["subjects_rs"][idx]
             )
+            subject_old = prev_subject[subject_index_rs]
         if self.sub_st[idx] in self.falff_subjects[index_site]:
             subject_index_rs = self.falff_subjects[index_site].index(
                 self.subject_sites["subjects_st"][idx]
             )
+            subject_old = prev_subject[subject_index_rs]
 
         if (
             self.sites_all[idx] not in self.special_sites_1
@@ -519,6 +636,11 @@ class StreamPairs(Dataset):
                 + subject_rs_path_2
                 + "_brainnetome_4d_mni_image_small.nii.gz"
             )
+            new_subj = subject_rs_path_1
+            old_subj = subject_rs_path_1
+            subj_str = subject_rs_path_1
+
+
         elif self.sites_all[idx] in self.special_sites_1:
             subject_rs_path_1 = self.falff_subjects[index_site][subject_index_rs]
             subject_rs_path_2 = self.subject_sites["subjects_st"][idx]
@@ -533,6 +655,8 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1.replace("M", "m").replace("O", "o")
                     + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
+                old_subj = subject_rs_path_1.replace("M", "m").replace("O", "o")
+
             elif self.sites_all[idx] == "NanjingYixing":
                 rs_data_path_1 = (
                     self.rs_path
@@ -542,8 +666,9 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1
                     + "/"
                     + subject_rs_path_1.replace("S", "s")
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
+                old_subj = subject_rs_path_1.replace("S", "s")
             else:
                 rs_data_path_1 = (
                     self.rs_path
@@ -555,6 +680,8 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1.lower()
                     + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
+                old_subj = subject_rs_path_1.lower()
+
             rs_data_path_2 = (
                 self.rs_path
                 + "/"
@@ -565,6 +692,10 @@ class StreamPairs(Dataset):
                 + subject_rs_path_2.lower()
                 + "_brainnetome_4d_mni_image_small.nii.gz"
             )
+
+            new_subj = subject_rs_path_1
+            subj_str = subject_rs_path_1
+
         elif self.sites_all[idx] in self.special_sites_2:
             # validates if subject_index_st exists
             if "subject_index_st" in locals():
@@ -590,6 +721,9 @@ class StreamPairs(Dataset):
                         "PA",
                         "pA") +
                     "_brainnetome_4d_mni_image_small.nii.gz")
+                old_subj = subject_rs_path_1.replace("DO", "dO").replace("PA", "pA")
+                subj_str = subject_rs_path_1.replace("DOP","DOP_").replace("PAL","PAL_")
+                new_subj = subject_rs_path_1
             elif self.sites_all[idx] == "Capetown":
                 rs_data_path_11 = (
                     self.rs_path
@@ -599,7 +733,7 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1.replace("sub-", "sub-capetown-")
                     + "/"
                     + subject_rs_path_1
-                    + "_brainnetome_4d_mni_image.nii.gz"
+                    + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
                 rs_data_path_12 = (
                     self.rs_path
@@ -613,8 +747,15 @@ class StreamPairs(Dataset):
                 )
                 if os.path.exists(rs_data_path_11):
                     rs_data_path_1 = rs_data_path_11
+                    old_subj = subject_rs_path_1
+                    subj_str = subject_rs_path_1.replace("sub-", "sub-capetown-")
+                    new_subj = subject_rs_path_1
                 if os.path.exists(rs_data_path_12):
                     rs_data_path_1 = rs_data_path_12
+                    old_subj = subject_rs_path_1
+                    subj_str = subject_rs_path_1.replace("sub-", "sub-tygerberg-")
+                    new_subj = subject_rs_path_1
+
             elif self.sites_all[idx] == "Beijing":
                 rs_data_path_1 = (
                     self.rs_path
@@ -628,6 +769,9 @@ class StreamPairs(Dataset):
                     + f"{int(subject_rs_path_1[4:]) + 880:03d}"
                     + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
+                old_subj = subject_rs_path_1[0:4] + f"{int(subject_rs_path_1[4:]) + 880:03d}"
+                subj_str = subject_rs_path_1[0:4] + f"{int(subject_rs_path_1[4:]) + 880:03d}"
+                new_subj = subject_rs_path_1
             else:
                 rs_data_path_1 = (
                     self.rs_path
@@ -639,6 +783,9 @@ class StreamPairs(Dataset):
                     + subject_rs_path_1
                     + "_brainnetome_4d_mni_image_small.nii.gz"
                 )
+                old_subj = subject_rs_path_1
+                subj_str = subject_rs_path_1
+                new_subj = subject_rs_path_1
             subject_rs_path_2 = self.subject_sites["subjects_st"][idx]
             rs_data_path_2 = (
                 self.rs_path
@@ -651,6 +798,14 @@ class StreamPairs(Dataset):
                 + "_brainnetome_4d_mni_image_small.nii.gz"
             )
 
+
+        if self.copy_data is True:
+               if not os.path.exists(f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}/{new_subj}"):
+                  validate_data_copy(rs_data_path_1, rs_data_path_2, subj_str, new_subj, old_subj, f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}", self.sites_all[idx], subject_old)
+               else:
+                  logger.info("New folder already exists skipping!!")
+                  return None
+
         # evaluate the existence of rs_data_path
         if os.path.exists(rs_data_path_1):
             # read here the RSData
@@ -660,14 +815,16 @@ class StreamPairs(Dataset):
             # read here the RSData
             rs_img = nib.load(rs_data_path_2, mmap=True)
         else:
-            logger.error(f"RSData does not exist for path {rs_data_path_1}")
+            if self.verbose is True:
+               logger.error(f"RSData does not exist for path {rs_data_path_1}")
             return None
 
-        logger.info(
-            f"Read RSdata from site {self.sites_all[idx]} subject {
+        if self.verbose is True:
+           logger.info(
+               f"Read RSdata from site {self.sites_all[idx]} subject {
                 self.subject_sites['subjects_rs'][idx]
-            } with RSData path {rs_data_path_1} or {rs_data_path_2}"
-        )
+               } with RSData path {rs_data_path_1} or {rs_data_path_2}"
+           )
 
         # resample the index vector first
         fs_current = 1 / self.tr_vals[self.sites_all[idx]]
@@ -682,11 +839,13 @@ class StreamPairs(Dataset):
 
         # take the length of each subject for plotting histogram lengths
         time_length = float(rs_img.dataobj.shape[3] / fs_current)
-
         if time_length <= 200:
-            # print this in the report to check the ids for the shorter trials
-            logger.error(
-                f"The data length is very short and its length is {time_length} secs for subject {self.subject_sites['subjects_rs'][idx]} and site {self.sites_all[idx]}")
+            if self.verbose is True:
+               # print this in the report to check the ids for the shorter trials
+               logger.error(
+                   f"The data length is very short and its length is {time_length} secs for subject {
+                      self.subject_sites['subjects_rs'][idx]} and site {
+                      self.sites_all[idx]}")
             # skip this subject because it is too short to take enough time
             # information
             return None
@@ -718,9 +877,18 @@ class StreamPairs(Dataset):
         # rs_img.dataobj[::self.rs_stride, ::self.rs_stride, ::self.rs_stride,
         # :])[..., new_index[0:self.rs_window_crop]]
 
-        logger.info(
-            f"Current TR is {self.tr_vals[self.sites_all[idx]]} and target TR is {self.tr_vals['max']}.The new 4D array resampled has {len(new_index[0 : self.rs_window_crop])} samples in time and original resample is {len(new_index)} with samples {new_index[0 : self.rs_window_crop]}, the idx of the original time-series is {idxs_vals}, time_length per subject is {time_length}"
-        )
+        if self.verbose is True:
+           logger.info(
+              f"Current TR is {
+                self.tr_vals[
+                    self.sites_all[idx]]} and target TR is {
+                self.tr_vals['max']}.The new 4D array resampled has {
+                    len(
+                        new_index[
+                            0: self.rs_window_crop])} samples in time and original resample is {
+                                len(new_index)} with samples {
+                                    new_index[
+                                        0: self.rs_window_crop]}, the idx of the original time-series is {idxs_vals}, time_length per subject is {time_length}")
 
         # replacing the suffixes of st_subjects here before comparing
         if self.sites_all[idx] == "UMN":
@@ -776,11 +944,23 @@ class StreamPairs(Dataset):
             self.falff_reho_DATA[index_site][2][subject_index_rs, :],
         ]
 
-        logger.info(
-            f"RS index {subject_index_rs} and ST index {subject_index_st}, for subject {
-                self.falff_subjects[index_site][subject_index_rs]
-            } in rs, and subject {self.st_subjects[index_site][subject_index_st]} in st"
-        )
+        if self.verbose is True:
+           logger.info(
+               f"RS index {subject_index_rs} and ST index {subject_index_st}, for subject {
+                  self.falff_subjects[index_site][subject_index_rs]} in rs, and subject {
+                  self.st_subjects[index_site][subject_index_st]} in st")
+
+        # normalize here the data before releasing it
+        if self.transform_3d is not None:
+           falff_reho_data_input[0] = self.transform_3d(falff_reho_data_input[0])
+           falff_reho_data_input[1] = self.transform_3d(falff_reho_data_input[1])
+           falff_reho_data_input[2] = self.transform_3d(falff_reho_data_input[2])
+           st_data_input[0] = self.transform_3d(st_data_input[0])
+           st_data_input[1] = self.transform_3d(st_data_input[1])
+           st_data_input[2] = self.transform_3d(st_data_input[2])
+
+        if self.transform_4d is not None:
+           rs_data = self.transform_4d(rs_data)
 
         # return the tuple with the values corresponding with the same subject
         # information
@@ -797,7 +977,13 @@ class StreamPairs(Dataset):
         )
 
 
-def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
+def define_dataset_dataloader_ENIGMA(
+        subject_indices_current_data: str,
+        batch_size: int = 10,
+        rs_time_window: int = 200,
+        rs_window_crop: int = 56,
+        verbose: bool = True,
+        copy_data: bool = False):
     """
     Construct the ENIGMA StreamPairs dataset and a PyTorch DataLoader.
 
@@ -813,6 +999,9 @@ def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
        data_loader_all: A PyTorch DataLoader object yielding multimodal batches suitable for training/eval. For the SSL section ** For now
     """
 
+    norm3d = ZScore3D()
+    norm4d = ZScore4DPerFrame()
+
     # define the dataset here and invoke the initialization call
     subject_sites = np.load(subject_indices_current_data)
     dataset_all = StreamPairs(
@@ -820,11 +1009,15 @@ def define_dataset_dataloader_ENIGMA(subject_indices_current_data: str):
         rs_path=RSdata_folder,
         st_path=structural_npz_folder,
         falff_reho_path=falff_reho_npz_folder,
-        rs_time_window=200,
-        rs_window_crop=56,
+        rs_time_window=rs_time_window,
+        rs_window_crop=rs_window_crop,
+        transform_3d=norm3d,
+        transform_4d=norm4d,
+        verbose=verbose,
+        copy_data=copy_data
     )  # don't increase rs_window_crop more than 56***
 
-    current_batch_size = 10
+    current_batch_size = batch_size
 
     # define the Dataloder here
     data_loader_all = DataLoader(
@@ -847,7 +1040,7 @@ if __name__ == "__main__":
 
     # read the dataloder object here
     data_loader_all = define_dataset_dataloader_ENIGMA(
-        subject_indices_current_data=subject_indices_current_data
+        subject_indices_current_data=subject_indices_current_data, copy_data=True
     )
 
     start_time = time.time()
@@ -884,11 +1077,11 @@ if __name__ == "__main__":
     end_time = time.time()
 
     logger.info(
-        f"dataloader final time reading after decimation {end_time - start_time} s")
+        f"dataloader final time reading after decimation {
+            end_time - start_time} s")
     logger.info(f"subjects with all modalities {len(torch.cat(idx_sample))}")
     logger.info(
-        f"data from sites {sites_unique} are taking into account in this dataloader"
-    )
+        f"data from sites {sites_unique} are taking into account in this dataloader")
 
     # convert the report here defined in the loguru configuration above
     # coloured
