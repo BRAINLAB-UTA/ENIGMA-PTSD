@@ -78,6 +78,21 @@ DATA_falff_reho = []
 SITES = []
 SUB = []
 
+## set the seeds for the generator here ***always define this in order to check out reliable epochs reiteration!! PLEASE ALWAYS set up the generator to avoid problems with replication!! 
+seed = 42
+
+# always define this seed before running your implementation!!
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+generator = torch.Generator()
+generator.manual_seed(seed)
+
 # creates a copy of all the content with the new suffixes here
 def copy_content_with_new_suffix(source_folder, dest_folder, old, new, modality):
     """
@@ -1109,6 +1124,8 @@ def define_dataset_dataloader_ENIGMA(
         shuffle=True,
         collate_fn=collate_drop_none,  # define this to skip the unexistent data
         pin_memory=True,
+        num_workers=0,
+        generator=generator,
     )
 
     # return the dataloader here
