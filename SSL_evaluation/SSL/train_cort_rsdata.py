@@ -49,7 +49,7 @@ forward-pass loop over the ENIGMA multimodal dataloader to validate:
      argv[8]
        constant temperature of SSL optimization - InfoNCE loss (contrastive)
 
- call it like this: python train.py 66 100 10 1e-4 1 128 1 0.07
+ call it like this: python train_structural_rsdata.py 66 100 10 1e-4 1 128 1 0.07
 
  Outputs:
     - Logs (via loguru) indicating successful reads and embedding computation.
@@ -74,18 +74,12 @@ import numpy as np
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # or "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-# import UMAP and t-SNE
-import umap.umap_ as umap
-from sklearn.manifold import TSNE
-
-# import this for calculating metrics
-from scipy.stats import wasserstein_distance
-from sklearn.cluster import KMeans
-from sklearn.metrics import normalized_mutual_info_score, silhouette_score
-
 # import plotting tools
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+import umap.umap_ as umap
+from sklearn.manifold import TSNE
 
 from loguru import logger
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -100,8 +94,25 @@ from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LS
 # import losses for SSL and alternative regularization
 from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
 
+# get the utils functions from the utils module **DO THAT FOR ALL THE CODE**
+
 # define the device here
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# import the utils function from tehe utils module
+from utils import ( load_latest_ckpt,
+                    read_metric_txt,
+                    plotting_twinx_variables,
+                    to_np,
+                    make_subject_palette,
+                    wasserstein_avg_over_dims,
+                    pairwise_wasserstein,
+                    stack_modalities,
+                    init_xavier,
+                    compute_silhouette,
+                    compute_nmi_via_kmeans,
+                    auto_padding
+                  )
 
 # set the seeds initialization here
 seed = 42
@@ -115,299 +126,28 @@ if torch.cuda.is_available():
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# function for loading the latest checkpoint generated
-def load_latest_ckpt(
-    ckpt_dir: str,
-    device: torch.device,
-    enc_4D_rsdata,
-    enc_alff,
-    enc_falff,
-    enc_reho,
-    optimizer_SSL=None,
-    scheduler_SSL=None,
-):
-    ckpt_dir = Path(ckpt_dir)
-    ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
 
-    if len(ckpt_files) == 0:
-        raise FileNotFoundError(f"No checkpoint files found in: {ckpt_dir}")
-
-    latest = ckpt_files[-1]
-    logger.info(f"Loading latest checkpoint as {latest}")
-
-    ckpt = torch.load(latest, map_location=device)
-
-    # ---- models loading process here
-    enc_4D_rsdata.load_state_dict(ckpt["models"]["enc_4D_rsdata"], strict=True)
-    enc_alff.load_state_dict(ckpt["models"]["enc_alff"], strict=True)
-    enc_falff.load_state_dict(ckpt["models"]["enc_falff"], strict=True)
-    enc_reho.load_state_dict(ckpt["models"]["enc_reho"], strict=True)
-
-    # ---- optimizer / scheduler loading - necessary for replication
-    if optimizer_SSL is not None and "optimizer_SSL" in ckpt:
-        optimizer_SSL.load_state_dict(ckpt["optimizer_SSL"])
-
-    if scheduler_SSL is not None and "scheduler_SSL" in ckpt:
-        scheduler_SSL.load_state_dict(ckpt["scheduler_SSL"])
-
-    start_iter = int(ckpt.get("iter", 0)) + 1
-
-    return start_iter, str(latest)
-
-# function for reading the interim text files
-def read_metric_txt(path_str: str):
-    """
-      reading the txt \n separated values
-      for continuing with the training process
-    """
-    vals: list[float] = []
-    for line in Path(path_str).read_text().splitlines():
-        s = line.strip()
-        if not s:
-            continue
-        vals.append(float(s))
-    return vals
-
-# function for plotting the interim metrics
-def plotting_twinx_variables(time_vector, data1, data2, title: str, x_label: str, y_label1: str, y_label2: str, folder_images: str, iter: int):
-    """
-    plot her twinx the variables you want to compare
-    across number of epochs in this case.
-
-    Plot two time series on twin y-axes and save.
-
-    Parameters
-    ----------
-    time_vector : array-like
-    data1, data2 : array-like
-        Series aligned to `time_vector`.
-    title, x_label, y_label1, y_label2 : str
-    folder_images : str
-    subj : str
-
-    Returns
-    -------
-    None
-    """
-
-    fig, ax1 = plt.subplots(figsize=(10, 6))
-    ax1.plot(time_vector, data1, "b-", label=y_label1, linewidth=3)
-    ax1.set_xlabel(x_label, fontsize=16)
-    ax1.set_ylabel(y_label1, color="blue", fontsize=16)
-    ax1.tick_params(axis="y", labelcolor="blue")
-
-    ax2 = ax1.twinx()
-
-    ax2.plot(time_vector, data2, "r-", label=y_label2, linewidth=3)
-    ax2.set_ylabel(y_label2, color="red", fontsize=16)
-    ax2.tick_params(axis="y", labelcolor="red")
-
-    ax1.grid(True)
-
-    for tick in ax1.get_xticklabels():
-        tick.set_fontsize(14)
-
-    plt.title(title)
-    fig.legend()
-    fig.savefig(f"{folder_images}/{y_label1}_{y_label2}_{iter}.jpg")
-    plt.close("all")
-
-# function for define the metrics here..
-def to_np(x: torch.Tensor) -> np.ndarray:
-    return x.detach().float().cpu().numpy()
-
-
-def wasserstein_avg_over_dims(A: np.ndarray, B: np.ndarray) -> float:
-    """
-    A, B: (B, D) arrays.
-    Computes 1D Wasserstein distance per dimension across the batch, then averages.
-    """
-    assert A.shape == B.shape, (A.shape, B.shape)
-    D = A.shape[1]
-    return float(np.mean([wasserstein_distance(A[:, d], B[:, d]) for d in range(D)]))
-
-
-def pairwise_wasserstein(embeds_np: dict) -> dict:
-    """
-    embeds_np: dict name -> (B,D)
-    returns dict (name_i, name_j) -> wasserstein distance
-    """
-    keys = list(embeds_np.keys())
-    out = {}
-    for i in range(len(keys)):
-        for j in range(i + 1, len(keys)):
-            ki, kj = keys[i], keys[j]
-            out[(ki, kj)] = wasserstein_avg_over_dims(embeds_np[ki], embeds_np[kj])
-    return out
-
-
-def stack_modalities(embeds_np: dict):
-    """
-    Returns:
-      X: (M*B, D)
-      modality_labels: (M*B,) integers 0..M-1
-    """
-    keys = list(embeds_np.keys())
-    X = np.concatenate([embeds_np[k] for k in keys], axis=0)
-    B = embeds_np[keys[0]].shape[0]
-    modality_labels = np.concatenate([np.full(B, i, dtype=int) for i in range(len(keys))], axis=0)
-    return X, modality_labels, keys
-
-
-def compute_nmi_via_kmeans(X: np.ndarray, true_labels: np.ndarray, n_clusters: int, seed: int = 42) -> float:
-    """
-    Cluster X, then compute NMI between cluster assignments and provided labels.
-    """
-    true_labels = np.asarray(true_labels)
-    uniq = np.unique(true_labels)
-    if uniq.size < 2:
-        return float("nan")  # or 0.0 if you prefer
-    km = KMeans(n_clusters=n_clusters, n_init="auto", random_state=seed)
-    pred = km.fit_predict(X)
-    return float(normalized_mutual_info_score(true_labels, pred))
-
-def compute_silhouette(X: np.ndarray, labels: np.ndarray, metric: str = "cosine") -> float:
-    """
-    Silhouette score for given labels.
-    With normalized embeddings, cosine is usually a good choice.
-    """
-    labels = np.asarray(labels)
-    uniq = np.unique(labels)
-    if uniq.size < 2:
-        return float("nan")  # or 0.0 if you prefer
-    return float(silhouette_score(X, labels, metric=metric))
-
-def make_subject_palette(subject_ids, palette_name="tab20"):
-    """
-    Create a deterministic subject->color mapping.
-    subject_ids: iterable of subject labels (strings or ints)
-    """
-    uniq = list(dict.fromkeys(subject_ids))  # preserves first-seen order
-    colors = sns.color_palette(palette_name, n_colors=len(uniq))
-    return {sid: col for sid, col in zip(uniq, colors)}
-
-# initialization function here
-def init_xavier(m: nn.Module, uniform: bool = True):
-    """
-    Initialize learnable weights of a module using Xavier/Glorot initialization.
-
-    This helper is designed to be used with 'nn.Module.apply(...)' so it will be
-    called recursively on every submodule of a model. It targets the common layers
-    used in this project:
-
-    - nn.Linear
-    - nn.Conv3d
-    - nn.MultiheadAttention (handles packed in_proj_* and out_proj)
-    - Normalization layers (LayerNorm, BatchNorm3d) are set to identity init
-
-    Parameters
-    ----------
-    m : torch.nn.Module
-      The submodule currently visited by 'Module.apply'.
-    uniform : bool, default=True
-      If True, uses 'nn.init.xavier_uniform_'.
-      If False, uses 'nn.init.xavier_normal_'.
-
-    --------
-    - For Linear/Conv3d:
-      - Weight initialized with Xavier (uniform or normal).
-      - Bias (if present) is zeroed.
-    - For MultiheadAttention:
-      - Initializes 'in_proj_weight' (or equivalent packed QKV weights) with Xavier.
-      - Zeroes 'in_proj_bias' if present.
-      - Initializes 'out_proj.weight' with Xavier and zeroes 'out_proj.bias'.
-    - For LayerNorm/BatchNorm3d:
-      - weight <- ones, bias <- zeros (safe identity init)
-    """
-
-    # Linear
-    if isinstance(m, nn.Linear):
-        if uniform:
-            nn.init.xavier_uniform_(m.weight)
-        else:
-            nn.init.xavier_normal_(m.weight)
-        if m.bias is not None:
-            nn.init.zeros_(m.bias)
-
-    # Conv3d
-    elif isinstance(m, nn.Conv3d):
-        if uniform:
-            nn.init.xavier_uniform_(m.weight)
-        else:
-            nn.init.xavier_normal_(m.weight)
-        if m.bias is not None:
-            nn.init.zeros_(m.bias)
-
-    # MultiheadAttention (handle its internal linear weights)
-    elif isinstance(m, nn.MultiheadAttention):
-        # in_proj (qkv packed) OR separate q/k/v weights
-        if hasattr(m, "in_proj_weight") and m.in_proj_weight is not None:
-            if uniform:
-                nn.init.xavier_uniform_(m.in_proj_weight)
-            else:
-                nn.init.xavier_normal_(m.in_proj_weight)
-            if m.in_proj_bias is not None:
-                nn.init.zeros_(m.in_proj_bias)
-
-        # out projection
-        if uniform:
-            nn.init.xavier_uniform_(m.out_proj.weight)
-        else:
-            nn.init.xavier_normal_(m.out_proj.weight)
-        if m.out_proj.bias is not None:
-            nn.init.zeros_(m.out_proj.bias)
-
-    # Norm layers (usually keep default, but safe to set)
-    elif isinstance(m, (nn.LayerNorm, nn.BatchNorm3d)):
-        if hasattr(m, "weight") and m.weight is not None:
-            nn.init.ones_(m.weight)
-        if hasattr(m, "bias") and m.bias is not None:
-            nn.init.zeros_(m.bias)
-
-
-def auto_padding(kernel, dilation=(1, 1, 1)):
-    """
-    Compute "same-ish" symmetric padding for 3D kernels under dilation.
-
-    For odd-valued kernel sizes, this returns the padding that preserves spatial
-    dimensions for stride=1 (approximately "same" convolution). The formula used:
-
-      padding_i = dilation_i * (kernel_i // 2)
-
-    Parameters
-    ----------
-    kernel : tuple[int, int, int]
-      3D kernel size (kD, kH, kW). Expected to be odd in most cases.
-    dilation : tuple[int, int, int], default=(1,1,1)
-      Dilation factors along each dimension.
-
-    Returns
-    -------
-    tuple[int, int, int]
-      Padding values (pD, pH, pW) suitable for nn.Conv3d(..., padding=...).
-    """
-    return tuple(d * (k // 2) for k, d in zip(kernel, dilation, strict=False))
-
-def get_concat_embedding(rs_DATA, falff_reho_DATA,
-                        enc_alff, enc_falff, enc_reho,
+# get the unique functions per modules here
+def get_concat_embedding(rs_DATA, st_DATA,
+                        enc_thick,
                         enc_4D_rsdata, batch_sizes):
     """
       get all the embeddings from each iteration here
       project all the data with the models trained after that
     """
-    out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
-    out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
-    out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-    # out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
-    # out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-    # out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
+    # out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
+    # out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
+    # out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
+    #out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
+    out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+    #out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
 
     rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
     RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
     out_rs = enc_4D_rsdata(RSDATA)
 
     embeds_all = {
-        "alff": out_alff, "falff": out_falff, "reho": out_reho, "rs": out_rs
+        "thick": out_thick, "rs": out_rs
     }
     embeds_all = {k: F.normalize(v, dim=1) for k, v in embeds_all.items()}
 
@@ -418,7 +158,7 @@ def get_concat_embedding(rs_DATA, falff_reho_DATA,
 
     X_all, mod_labels, mod_keys = stack_modalities(embeds_np)
 
-    val_clust = np.tile(np.arange(batch_sizes), 4)
+    val_clust = np.tile(np.arange(batch_sizes), 2)
 
     if len(val_clust) > 1:
        sil_mod = compute_silhouette(X_all, val_clust, metric="cosine")
@@ -427,7 +167,7 @@ def get_concat_embedding(rs_DATA, falff_reho_DATA,
        sil_mod = np.nan
        nmi_mod = np.nan
 
-    z = torch.cat([embeds_all[k] for k in ["alff","falff","reho","rs"]], dim=1)
+    z = torch.cat([embeds_all[k] for k in ["thick","rs"]], dim=1)
     return z, wd, sil_mod, nmi_mod, embeds_all
 
 ## get the UMAP and tSNE projections here..
@@ -440,7 +180,7 @@ def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
     # take into account these values are concat projections of ndim values
     # reshape here the input values here
     Z_stacked = np.vstack(Z)
-    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 4, ndim)
+    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 2, ndim)
     Z_final = Z_reshaped.reshape(-1, ndim)
     umap_proj = umap_map.fit_transform(Z_final)
 
@@ -464,7 +204,7 @@ def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modali
     None
     """
 
-    markers=["o", "X", "s", "D"]
+    markers=["^", "D"]
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=proj_feat[:, 0], y=proj_feat[:, 1], hue=sub_labels, hue_order=subject_order, style=modalities, markers=markers, palette=subject_palette, s=180, edgecolor="k", alpha=0.7, legend=False)
     plt.title(title)
@@ -491,8 +231,8 @@ if __name__ == "__main__":
     rs_data_model_sel = int(sys.argv[7])
     temperature = float(sys.argv[8])
 
-    model_path = f"./models/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
-    vis_path = f"./visualization/folder_4_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    model_path = f"./models/folder_4_cort_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    vis_path = f"./visualization/folder_4_cort_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
 
 
     # Define here the models and plot folders for interim results visualization
@@ -585,7 +325,7 @@ if __name__ == "__main__":
         out_dim=out_dim,
         emb_dim=out_dim*2,
         attn_heads=1,
-        activation_function="silu",
+        activation_function="gelu",
         attention_projection=True,
         conv_overrides=[
             # alway define this kernel size and padding  as odd values NOT event. Just
@@ -610,7 +350,7 @@ if __name__ == "__main__":
         out_dim=out_dim,
         emb_dim=out_dim*2,
         attn_heads=1,
-        activation_function="silu",
+        activation_function="gelu",
         attention_projection=True,
         conv_overrides=[
             # alway define this kernel size and padding  as odd values NOT event. Just
@@ -693,18 +433,18 @@ if __name__ == "__main__":
        )
 
     # initialize weights models
-    for model in [enc_4D_rsdata, enc_alff, enc_falff, enc_reho]:
+    for model in [enc_4D_rsdata, enc_thick]:
         model.to(device)
         model.apply(lambda m: init_xavier(m, uniform=True))
 
 
     # define the optimizer here
-    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_alff.parameters()) + list(enc_falff.parameters()) + list(enc_reho.parameters()), lr=learning_rate)
+    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_thick.parameters()), lr=learning_rate)
     scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=1e-5)
 
     # validates this first!!
     if os.path.exists(model_path) and os.listdir(model_path):
-       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
+       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_thick, optimizer_SSL, scheduler_SSL)
        MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
        SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
        WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
@@ -722,9 +462,9 @@ if __name__ == "__main__":
 
     # set the models in train mode
     enc_4D_rsdata.train()
-    enc_alff.train()
-    enc_falff.train()
-    enc_reho.train()
+    # enc_vol.train()
+    # enc_surf.train()
+    enc_thick.train()
 
     # GET HERE THE DATALODERS WITH THE PROJECTED IMAGES AND DIFFERENT MODALITIES - TAKING INTO ACCOUNT 21 DIFFERENT PAIRS
     # read the dataloder object here. Take 200s for all the trials/subjects here
@@ -771,6 +511,7 @@ if __name__ == "__main__":
                 sampling_index,
                 time_subject,
                 TRs,
+                age
             ) = batch_data
 
             # define the data in cuda memory
@@ -781,11 +522,11 @@ if __name__ == "__main__":
             falff_reho_DATA = [d.to(device, non_blocking=True) for d in falff_reho_DATA]
 
             # get the inputs on each modality and get the embeddings
-            out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
-            out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
-            out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
+            #out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
+            #out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
+            #out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
             #out_surf = enc_surf(st_DATA[0].unsqueeze(1))
-            #out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+            out_thick = enc_thick(st_DATA[1].unsqueeze(1))
             #out_vol = enc_vol(st_DATA[2].unsqueeze(1))
             # create the list of tensor the 4D image timesamples. Do this permutation before transforming the tensor to a list of tensors!!
             rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
@@ -793,9 +534,7 @@ if __name__ == "__main__":
             out_rsdata = enc_4D_rsdata(RSDATA)
 
             embeds_all = {
-              "alff":  out_alff,    # (B,D)
-              "falff": out_falff,   # (B,D)
-              "reho":  out_reho,    # (B,D)
+              "thick":  out_thick,    # (B,D)
               "rs":    out_rsdata,  # (B,D)
             }
 
@@ -831,7 +570,7 @@ if __name__ == "__main__":
         mean_loss_value = mean_loss.item()
         logger.info(f"Training iteration {iter} with loss: {mean_loss_value}..")
 
-        models = [enc_4D_rsdata, enc_alff, enc_falff, enc_reho] # enc_vol, enc_surf, enc_thick]
+        models = [enc_4D_rsdata, enc_thick]
         # processing the projected embeddings in eval mode
         # ---- END OF EPOCH: EMBEDDING SNAPSHOT IN EVAL MODE ----
         # (optional: only every few epochs)
@@ -852,20 +591,19 @@ if __name__ == "__main__":
                for j, batch_data_eval in enumerate(data_loader_ENIGMA):
 
                    if batch_data_eval is None:  # validate this when batch is None and skip
-                      continue
+                       continue
 
                    # read all the batches again to project the embeddings in eval mode**
                    (idx_eval, rs_DATA_eval, st_DATA_eval, falff_reho_DATA_eval, subject_index_eval, sites_idx_eval,
-                   sampling_index_eval, time_subject_eval, TRs_eval) = batch_data_eval
+                   sampling_index_eval, time_subject_eval, TRs_eval, age_eval) = batch_data_eval
 
                    rs_DATA_eval = rs_DATA_eval.to(device, non_blocking=True)
-                   # st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
-                   falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
+                   st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
+                   # falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
 
                    z, wd, sil, nmi, _ = get_concat_embedding(
-                      rs_DATA_eval, falff_reho_DATA_eval,
-                      enc_alff, enc_falff, enc_reho,
-                      enc_4D_rsdata, len(idx_eval)
+                      rs_DATA_eval, st_DATA_eval,
+                      enc_thick, enc_4D_rsdata, len(idx_eval)
                    )
 
                    Z_vals.append(z.detach().cpu().numpy())
@@ -878,10 +616,10 @@ if __name__ == "__main__":
 
            # get UMAP and t-SNE projections
            umap_projections = get_UMAP_tSNE_projections(Z=Z_vals, proj_components=2, ndim=out_dim)
-           modality_ids = np.tile(np.arange(4), np.vstack(Z_vals).shape[0])
+           modality_ids = np.tile(np.arange(2), np.vstack(Z_vals).shape[0])
            subs_evals = [str(s) for sublist in subs_evals for s in sublist]
            subs_evals = np.array(subs_evals)  # convert list → array
-           subs_evals_long = np.repeat(subs_evals, 4)
+           subs_evals_long = np.repeat(subs_evals, 2)
 
            MI_vals.append(np.nanmean(np.array(mi_vals)))
            SIL_vals.append(np.nanmean(np.array(sil_vals)))
@@ -926,9 +664,7 @@ if __name__ == "__main__":
                 "iter": iter,
                 "models": {
                    "enc_4D_rsdata": enc_4D_rsdata.state_dict(),
-                   "enc_alff": enc_alff.state_dict(),
-                   "enc_falff": enc_falff.state_dict(),
-                   "enc_reho": enc_reho.state_dict(),
+                   "enc_thick": enc_thick.state_dict(),
                 },
                 "optimizer_SSL": optimizer_SSL.state_dict(),
                 "scheduler_SSL": scheduler_SSL.state_dict(),

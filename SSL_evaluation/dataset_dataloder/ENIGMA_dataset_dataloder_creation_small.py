@@ -20,6 +20,7 @@ import re
 import warnings
 import matplotlib.pyplot as plt
 import shutil
+import pandas as pd
 
 import nibabel as nib
 import numpy as np
@@ -32,6 +33,7 @@ from pathlib import Path
 
 # define this to skip unexistent data
 from torch.utils.data.dataloader import default_collate
+from .utils import reading_ENIGMA_excel_sheet
 
 # To ignore all warnings:
 warnings.filterwarnings("ignore")
@@ -107,33 +109,66 @@ def copy_content_with_new_suffix(source_folder, dest_folder, old, new, modality)
     logger.info(f"{src} folder has been copied to {dst}!!")
 
 # validate data for the case of copying
-def validate_data_copy(rs_data_path_1: str, rs_data_path_2: str, subject_str: str, new: str, old: str, new_directory: str, site: str, prev_subj: str):
+def validate_data_copy(rs_data_path_1: str, rs_data_path_2: str, subject_str: str, new: str, old: str, new_directory: str, site: str, prev_subj: str, alternative_st_path: str):
      """
         validate the existance of data and copy the data on BIDS format
         With anat and func format per site and inside the new location of new data folder
      """
      if os.path.exists(rs_data_path_1.rsplit('/',1)[0]):
+        #if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')):
+        #    path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')
+        #   copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
+        if site == "Cisler":
+           rs_data_path_cisler = rs_data_path_1.replace("_","")
+           if os.path.exists(rs_data_path_cisler.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
+              path_val = rs_data_path_cisler.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+              copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+        elif site == "Capetown":
+           if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/").replace("-tygerberg","").replace("-capetown","")):
+              path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/").replace("-tygerberg","").replace("-capetown","")
+              copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+        elif site == "Beijing":
+              path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+              path_val = path_val[:-3] + f"{int(path_val[-3:]) - 880:03d}"
+              copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+        else:
+           if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
+              path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+              copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+
+        # validate structural existence exclusively
         if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')):
-           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')
+           if alternative_st_path is None:
+              path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural')
+           else:
+              path_val = alternative_st_path.rsplit('/',1)[0].replace('RSData','Structural')
            copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
-        if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
-           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
-           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
-        if os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)):
-           path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)
+
+        elif os.path.exists(rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)):
+           if alternative_st_path is None:
+              path_val = rs_data_path_1.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)
+           else:
+              path_val = alternative_st_path.rsplit('/',1)[0].replace('RSData','Structural').replace(subject_str, prev_subj)
            copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
 
         copy_content_with_new_suffix(rs_data_path_1.rsplit('/',1)[0], f"{new_directory}/{new}/", old, new, "rs")
 
+     # validate second option here
      if os.path.exists(rs_data_path_2.rsplit('/',1)[0]):
         if os.path.exists(rs_data_path_2.rsplit('/',1)[0].replace('RSData','Structural')):
-           path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','Structural')
+           if alternative_st_path is None:
+              path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','Structural')
+           else:
+              path_val = alternative_st_path.rsplit('/',1)[0].replace('RSData','Structural')
            copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
         if os.path.exists(rs_data_path_2.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")):
-           path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
-           copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
+            path_val = rs_data_path_2.rsplit('/',1)[0].replace('RSData','falff_reho').replace(site,f"{site}/{site}/")
+            copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "falff_reho")
 
-     # breakpoint()
+     # do this with special sites
+     if alternative_st_path is not None and os.path.exists(alternative_st_path.rsplit('/',1)[0].replace('RSData','Structural')):
+         path_val = alternative_st_path.rsplit('/',1)[0].replace('RSData','Structural')
+         copy_content_with_new_suffix(path_val, f"{new_directory}/{new}/", old, new, "st")
 
 # plot the histogram with defined values
 
@@ -340,9 +375,18 @@ class StreamPairs(Dataset):
             "NanjingYixing",
             "Masaryk"]
         self.special_sites_2 = ["Beijing", "Capetown", "Cisler"]
+        self.special_sites_3 = ["Milwaukee", "UWash", "Leiden"]
 
         self.rs_path = rs_path
         self.st_path = st_path
+        self.enigma_main_path = "/home/mayortorresjm/ENIGMA-PTSD/Data/ENIGMA-PGC_master_v1.3.1.xlsx"
+
+        self.df_ENIGMA = pd.read_excel(
+            self.enigma_main_path,
+            sheet_name="Main",
+            skiprows=0,  # start reading at row 5 (0-based skip)
+            header=None,  # no header in those rows
+        )
         self.falff_reho_path = falff_reho_path
         self.rs_time_window = rs_time_window
         self.rs_random_window = rs_random_window
@@ -387,7 +431,7 @@ class StreamPairs(Dataset):
                     mmap_mode="r",
                 )
 
-                # perform the decimation here
+                # perform the decimation here USE destriux
                 self.st_DATA.append([self.st_data_site["rs_tensor_3d_dest_surf"][:,
                                                                                  :: self.st_stride,
                                                                                  :: self.st_stride,
@@ -563,8 +607,10 @@ class StreamPairs(Dataset):
 
         index_site = self.sites.index(self.sites_all[idx])
 
-        prev_subject = self.st_subjects[index_site]
+        subject_old = self.subject_sites["subjects_st"][idx]
 
+        alternative_st_path = None
+        self.st_subjects_before = self.st_subjects[index_site]
         # replacing the suffixes of st_subjects here before comparing
         if self.sites_all[idx] == "UMN":
             self.st_subjects[index_site] = [
@@ -593,22 +639,18 @@ class StreamPairs(Dataset):
             subject_index_st = self.st_subjects[index_site].index(
                 self.subject_sites["subjects_rs"][idx]
             )
-            subject_old = prev_subject[subject_index_st]
         if self.sub_st[idx] in self.st_subjects[index_site]:
             subject_index_st = self.st_subjects[index_site].index(
                 self.subject_sites["subjects_st"][idx]
             )
-            subject_old = prev_subject[subject_index_st]
         if self.sub_rs[idx] in self.falff_subjects[index_site]:
             subject_index_rs = self.falff_subjects[index_site].index(
                 self.subject_sites["subjects_rs"][idx]
             )
-            subject_old = prev_subject[subject_index_rs]
         if self.sub_st[idx] in self.falff_subjects[index_site]:
             subject_index_rs = self.falff_subjects[index_site].index(
                 self.subject_sites["subjects_st"][idx]
             )
-            subject_old = prev_subject[subject_index_rs]
 
         if (
             self.sites_all[idx] not in self.special_sites_1
@@ -772,6 +814,21 @@ class StreamPairs(Dataset):
                 old_subj = subject_rs_path_1[0:4] + f"{int(subject_rs_path_1[4:]) + 880:03d}"
                 subj_str = subject_rs_path_1[0:4] + f"{int(subject_rs_path_1[4:]) + 880:03d}"
                 new_subj = subject_rs_path_1
+            # uncomment this when the time comes
+            #elif self.sites_all[idx] == "Michigan":
+            #    rs_data_path_1 = (
+            #        self.rs_path
+            #        + "/"
+            #        + self.sites_all[idx]
+            #        + "/"
+            #        + subject_rs_path_1
+            #        + "/"
+            #        + subject_rs_path_1.replace("M", "m")
+            #        + "_brainnetome_4d_mni_image_small.nii.gz"
+            #    )
+            #    old_subj = subject_rs_path_1
+            #    subj_str = subject_rs_path_1
+            #    new_subj = subject_rs_path_1
             else:
                 rs_data_path_1 = (
                     self.rs_path
@@ -799,12 +856,18 @@ class StreamPairs(Dataset):
             )
 
 
-        if self.copy_data is True:
-               if not os.path.exists(f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}/{new_subj}"):
-                  validate_data_copy(rs_data_path_1, rs_data_path_2, subj_str, new_subj, old_subj, f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}", self.sites_all[idx], subject_old)
-               else:
-                  logger.info("New folder already exists skipping!!")
-                  return None
+        if self.sites_all[idx] in self.special_sites_3:
+               alternative_st_path = (
+                  self.rs_path
+                  + "/"
+                  + self.sites_all[idx]
+                  + "/"
+                  + self.st_subjects_before[subject_index_st]
+                  + "/"
+                  + self.st_subjects_before[subject_index_st]
+                  + "_brainnetome_4d_mni_image_small.nii.gz"
+               )
+
 
         # evaluate the existence of rs_data_path
         if os.path.exists(rs_data_path_1):
@@ -912,6 +975,7 @@ class StreamPairs(Dataset):
                 s.replace("_", "S") for s in self.st_subjects[index_site]
             ]
 
+        # do this for validation
         if self.sub_rs[idx] in self.st_subjects[index_site]:
             subject_index_st = self.st_subjects[index_site].index(
                 self.subject_sites["subjects_rs"][idx]
@@ -928,6 +992,17 @@ class StreamPairs(Dataset):
             subject_index_rs = self.falff_subjects[index_site].index(
                 self.subject_sites["subjects_st"][idx]
             )
+
+        # uncomment this in case if this is needed!!!
+        #if rs_data_path_1 != rs_data_path_2:
+        #   breakpoint()
+
+        if self.copy_data is True:
+               if not os.path.exists(f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}/{new_subj}"):
+                  validate_data_copy(rs_data_path_1, rs_data_path_2, subj_str, new_subj, old_subj, f"/home/mayortorresjm/ENIGMA-PTSD/Clean_Data/{self.sites_all[idx]}", self.sites_all[idx], subject_old, alternative_st_path)
+               else:
+                  logger.info("New folder already exists skipping!!")
+                  return None
 
         if "subject_index_st" not in locals():
             return None
@@ -962,6 +1037,13 @@ class StreamPairs(Dataset):
         if self.transform_4d is not None:
            rs_data = self.transform_4d(rs_data)
 
+        # extract the corresponding labels per subject directly from the ENIGMA main spreadsheet
+        df_per_subject = reading_ENIGMA_excel_sheet(self.df_ENIGMA, self.sites_all[idx], self.subject_sites["subjects_rs"][idx], self.verbose)
+        if df_per_subject is not None:
+           age_subject = df_per_subject["Age"].iloc[0]
+        else:
+           age_subject = 21 # just for default in this moment**
+
         # return the tuple with the values corresponding with the same subject
         # information
         return (
@@ -973,7 +1055,8 @@ class StreamPairs(Dataset):
             self.sites_all[idx],
             new_index[0: self.rs_window_crop],
             time_length,
-            self.tr_vals[self.sites_all[idx]]
+            self.tr_vals[self.sites_all[idx]],
+            age_subject
         )
 
 
@@ -1040,7 +1123,7 @@ if __name__ == "__main__":
 
     # read the dataloder object here
     data_loader_all = define_dataset_dataloader_ENIGMA(
-        subject_indices_current_data=subject_indices_current_data, copy_data=True
+        subject_indices_current_data=subject_indices_current_data, copy_data=False
     )
 
     start_time = time.time()
