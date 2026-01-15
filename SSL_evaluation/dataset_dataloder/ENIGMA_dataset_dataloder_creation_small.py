@@ -28,7 +28,7 @@ import torch
 from itertools import chain
 from ansi2html import Ansi2HTMLConverter
 from loguru import logger
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
 from pathlib import Path
 
 # define this to skip unexistent data
@@ -1081,7 +1081,8 @@ def define_dataset_dataloader_ENIGMA(
         rs_time_window: int = 200,
         rs_window_crop: int = 56,
         verbose: bool = True,
-        copy_data: bool = False):
+        copy_data: bool = False,
+        shuffling: bool = True):
     """
     Construct the ENIGMA StreamPairs dataset and a PyTorch DataLoader.
 
@@ -1116,16 +1117,20 @@ def define_dataset_dataloader_ENIGMA(
     )  # don't increase rs_window_crop more than 56***
 
     current_batch_size = batch_size
+    Ndata = len(dataset_all)  # same dataset used for both loaders
+    perm = torch.randperm(Ndata, generator=generator).tolist()
+
+    sampler = SubsetRandomSampler(perm)  # uses your perm list
 
     # define the Dataloder here
     data_loader_all = DataLoader(
         dataset_all,
         batch_size=current_batch_size,
-        shuffle=True,
+        sampler=sampler,
+        shuffle=shuffling,
         collate_fn=collate_drop_none,  # define this to skip the unexistent data
         pin_memory=True,
         num_workers=0,
-        generator=generator,
     )
 
     # return the dataloader here

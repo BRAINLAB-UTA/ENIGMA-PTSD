@@ -474,17 +474,18 @@ if __name__ == "__main__":
         batch_size=batch_size,
         rs_time_window=200,
         rs_window_crop=time_samples,
-        verbose=False
+        verbose=False,
+        shuffling=False
     )
 
-    data_loader_ENIGMA_eval = define_dataset_dataloader_ENIGMA(
-         subject_indices_current_data=subject_indices_current_data,
-         batch_size=batch_size,
-         rs_time_window=200,
-         rs_window_crop=time_samples,
-         verbose=False,
-         shuffling=False
-    )
+    #data_loader_ENIGMA_eval = define_dataset_dataloader_ENIGMA(
+    #     subject_indices_current_data=subject_indices_current_data,
+    #     batch_size=batch_size,
+    #     rs_time_window=200,
+    #     rs_window_crop=time_samples,
+    #     verbose=False,
+    #     shuffling=False
+    #)
 
     # define the modalities here
     # mods = ["RSdata", "vol", "surf", "thick", "alff", "falff", "reho"]
@@ -599,7 +600,7 @@ if __name__ == "__main__":
 
            # collect a limited number of batches to keep it light
            with torch.no_grad():
-               for j, batch_data_eval in enumerate(data_loader_ENIGMA_eval):
+               for j, batch_data_eval in enumerate(data_loader_ENIGMA):
 
                    if batch_data_eval is None:  # validate this when batch is None and skip
                       continue
