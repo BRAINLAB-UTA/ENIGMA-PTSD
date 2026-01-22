@@ -74,18 +74,12 @@ import numpy as np
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # or "1"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-# import UMAP and t-SNE
-import umap.umap_ as umap
-from sklearn.manifold import TSNE
-
-# import this for calculating metrics
-from scipy.stats import wasserstein_distance
-from sklearn.cluster import KMeans
-from sklearn.metrics import normalized_mutual_info_score, silhouette_score
-
 # import plotting tools
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+import umap.umap_ as umap
+from sklearn.manifold import TSNE
 
 from loguru import logger
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -97,8 +91,16 @@ from dataset_dataloder.ENIGMA_dataset_dataloder_creation_small import define_dat
 # get the model definitions here***
 from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LSTM, ResNet3DEncoder, LateFusion4DResNet_TemporalConv
 
+# import losses for SSL and alternative regularization
+from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
+
+# get the utils functions from the utils module **DO THAT FOR ALL THE CODE**
+
+# define the device here
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 # import the utils function from tehe utils module
-from utils import ( load_latest_ckpt_struct,
+from utils import ( load_latest_ckpt_cort,
                     read_metric_txt,
                     plotting_twinx_variables,
                     to_np,
@@ -112,12 +114,6 @@ from utils import ( load_latest_ckpt_struct,
                     auto_padding
                   )
 
-# import losses for SSL and alternative regularization
-from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
-
-# define the device here
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 # set the seeds initialization here
 seed = 42
 
@@ -130,8 +126,11 @@ if torch.cuda.is_available():
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-def get_concat_embedding(st_DATA,
-                        enc_vol, enc_surf, enc_thick, batch_sizes):
+
+# get the unique functions per modules here
+def get_concat_embedding(rs_DATA, st_DATA,
+                        enc_thick,
+                        enc_4D_rsdata, batch_sizes):
     """
       get all the embeddings from each iteration here
       project all the data with the models trained after that
@@ -139,16 +138,16 @@ def get_concat_embedding(st_DATA,
     # out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
     # out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
     # out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-    out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
+    #out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
     out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-    out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
+    #out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
 
-    #rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
-    #RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
-    #out_rs = enc_4D_rsdata(RSDATA)
+    rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
+    RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
+    out_rs = enc_4D_rsdata(RSDATA)
 
     embeds_all = {
-        "vol": out_vol, "surf": out_surf, "thick": out_thick
+        "thick": out_thick, "rs": out_rs
     }
     embeds_all = {k: F.normalize(v, dim=1) for k, v in embeds_all.items()}
 
@@ -159,7 +158,7 @@ def get_concat_embedding(st_DATA,
 
     X_all, mod_labels, mod_keys = stack_modalities(embeds_np)
 
-    val_clust = np.tile(np.arange(batch_sizes), 3)
+    val_clust = np.tile(np.arange(batch_sizes), 2)
 
     if len(val_clust) > 1:
        sil_mod = compute_silhouette(X_all, val_clust, metric="cosine")
@@ -168,7 +167,7 @@ def get_concat_embedding(st_DATA,
        sil_mod = np.nan
        nmi_mod = np.nan
 
-    z = torch.cat([embeds_all[k] for k in ["vol","surf","thick"]], dim=1)
+    z = torch.cat([embeds_all[k] for k in ["thick","rs"]], dim=1)
     return z, wd, sil_mod, nmi_mod, embeds_all
 
 ## get the UMAP and tSNE projections here..
@@ -181,7 +180,7 @@ def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
     # take into account these values are concat projections of ndim values
     # reshape here the input values here
     Z_stacked = np.vstack(Z)
-    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 3, ndim)
+    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 2, ndim)
     Z_final = Z_reshaped.reshape(-1, ndim)
     umap_proj = umap_map.fit_transform(Z_final)
 
@@ -205,7 +204,7 @@ def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modali
     None
     """
 
-    markers=["v", "P", "^"]
+    markers=["^", "D"]
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=proj_feat[:, 0], y=proj_feat[:, 1], hue=sub_labels, hue_order=subject_order, style=modalities, markers=markers, palette=subject_palette, s=180, edgecolor="k", alpha=0.7, legend=False)
     plt.title(title)
@@ -232,8 +231,8 @@ if __name__ == "__main__":
     rs_data_model_sel = int(sys.argv[7])
     temperature = float(sys.argv[8])
 
-    model_path = f"./models/folder_4_struct_only_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
-    vis_path = f"./visualization/folder_4_struct_only_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    model_path = f"./models/folder_4_cort_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    vis_path = f"./visualization/folder_4_cort_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
 
 
     # Define here the models and plot folders for interim results visualization
@@ -429,23 +428,23 @@ if __name__ == "__main__":
            dilation_growth=2,
            attention_projection=True,
            attn_heads=1,
-           pool= "concat", #"mean", # remember to change it back
+           pool= "concat", ##"concat", # remember to change it back
            out_dim_final=out_dim,
        )
 
     # initialize weights models
-    for model in [enc_vol, enc_surf, enc_thick]:
+    for model in [enc_4D_rsdata, enc_thick]:
         model.to(device)
         model.apply(lambda m: init_xavier(m, uniform=True))
 
 
     # define the optimizer here
-    optimizer_SSL = torch.optim.AdamW(list(enc_vol.parameters()) + list(enc_surf.parameters()) + list(enc_thick.parameters()), lr=learning_rate)
+    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_thick.parameters()), lr=learning_rate)
     scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=1e-5)
 
     # validates this first!!
     if os.path.exists(model_path) and os.listdir(model_path):
-       start_iter, _ = load_latest_ckpt_struct(model_path, device, enc_surf, enc_thick, enc_vol, optimizer_SSL, scheduler_SSL)
+       start_iter, _ = load_latest_ckpt_cort(model_path, device, enc_4D_rsdata, enc_thick, optimizer_SSL, scheduler_SSL)
        MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
        SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
        WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
@@ -462,9 +461,9 @@ if __name__ == "__main__":
     logger.info("All encoders has been defined!!")
 
     # set the models in train mode
-    # enc_4D_rsdata.train()
-    enc_vol.train()
-    enc_surf.train()
+    enc_4D_rsdata.train()
+    # enc_vol.train()
+    # enc_surf.train()
     enc_thick.train()
 
     # GET HERE THE DATALODERS WITH THE PROJECTED IMAGES AND DIFFERENT MODALITIES - TAKING INTO ACCOUNT 21 DIFFERENT PAIRS
@@ -479,12 +478,12 @@ if __name__ == "__main__":
     )
 
     #data_loader_ENIGMA_eval = define_dataset_dataloader_ENIGMA(
-    #     subject_indices_current_data=subject_indices_current_data,
-    #     batch_size=batch_size,
-    #     rs_time_window=200,
-    #     rs_window_crop=time_samples,
-    #     verbose=False,
-    #     shuffling=False
+    #    subject_indices_current_data=subject_indices_current_data,
+    #    batch_size=batch_size,
+    #    rs_time_window=200,
+    #    rs_window_crop=time_samples,
+    #    verbose=False,
+    #    shuffling=False
     #)
 
     # define the modalities here
@@ -536,18 +535,17 @@ if __name__ == "__main__":
             #out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
             #out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
             #out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-            out_surf = enc_surf(st_DATA[0].unsqueeze(1))
+            #out_surf = enc_surf(st_DATA[0].unsqueeze(1))
             out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-            out_vol = enc_vol(st_DATA[2].unsqueeze(1))
+            #out_vol = enc_vol(st_DATA[2].unsqueeze(1))
             # create the list of tensor the 4D image timesamples. Do this permutation before transforming the tensor to a list of tensors!!
-            #rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
-            #RSDATA = [rs_DATA[:, t] for t in range(rs_DATA.shape[1])]
-            #out_rsdata = enc_4D_rsdata(RSDATA)
+            rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
+            RSDATA = [rs_DATA[:, t] for t in range(rs_DATA.shape[1])]
+            out_rsdata = enc_4D_rsdata(RSDATA)
 
             embeds_all = {
-              "vol":  out_vol,    # (B,D)
-              "surf": out_surf,   # (B,D)
               "thick":  out_thick,    # (B,D)
+              "rs":    out_rsdata,  # (B,D)
             }
 
             # normalize the embeddings here to make it easier map in the l2-sphere later..
@@ -582,7 +580,7 @@ if __name__ == "__main__":
         mean_loss_value = mean_loss.item()
         logger.info(f"Training iteration {iter} with loss: {mean_loss_value}..")
 
-        models = [enc_vol, enc_surf, enc_thick]
+        models = [enc_4D_rsdata, enc_thick]
         # processing the projected embeddings in eval mode
         # ---- END OF EPOCH: EMBEDDING SNAPSHOT IN EVAL MODE ----
         # (optional: only every few epochs)
@@ -603,7 +601,7 @@ if __name__ == "__main__":
                for j, batch_data_eval in enumerate(data_loader_ENIGMA):
 
                    if batch_data_eval is None:  # validate this when batch is None and skip
-                      continue
+                       continue
 
                    # read all the batches again to project the embeddings in eval mode**
                    (idx_eval, rs_DATA_eval, st_DATA_eval, falff_reho_DATA_eval, subject_index_eval, sites_idx_eval,
@@ -614,8 +612,8 @@ if __name__ == "__main__":
                    # falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
 
                    z, wd, sil, nmi, _ = get_concat_embedding(
-                      st_DATA_eval,
-                      enc_vol, enc_surf, enc_thick, len(idx_eval)
+                      rs_DATA_eval, st_DATA_eval,
+                      enc_thick, enc_4D_rsdata, len(idx_eval)
                    )
 
                    Z_vals.append(z.detach().cpu().numpy())
@@ -628,10 +626,10 @@ if __name__ == "__main__":
 
            # get UMAP and t-SNE projections
            umap_projections = get_UMAP_tSNE_projections(Z=Z_vals, proj_components=2, ndim=out_dim)
-           modality_ids = np.tile(np.arange(3), np.vstack(Z_vals).shape[0])
+           modality_ids = np.tile(np.arange(2), np.vstack(Z_vals).shape[0])
            subs_evals = [str(s) for sublist in subs_evals for s in sublist]
            subs_evals = np.array(subs_evals)  # convert list → array
-           subs_evals_long = np.repeat(subs_evals, 3)
+           subs_evals_long = np.repeat(subs_evals, 2)
 
            MI_vals.append(np.nanmean(np.array(mi_vals)))
            SIL_vals.append(np.nanmean(np.array(sil_vals)))
@@ -675,8 +673,7 @@ if __name__ == "__main__":
            ckpt = {
                 "iter": iter,
                 "models": {
-                   "enc_vol": enc_vol.state_dict(),
-                   "enc_surf": enc_surf.state_dict(),
+                   "enc_4D_rsdata": enc_4D_rsdata.state_dict(),
                    "enc_thick": enc_thick.state_dict(),
                 },
                 "optimizer_SSL": optimizer_SSL.state_dict(),

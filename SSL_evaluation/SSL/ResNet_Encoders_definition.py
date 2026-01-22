@@ -896,6 +896,209 @@ class LateFusion4DResNet(nn.Module):
         return self.fuse(z)
 
 
+# Define the ResNetLSTM as choice to process the temporal dynamics in the last layer
+class LateFusion4DResNet_LSTM(nn.Module):
+    """
+    Late-fusion RS model:
+      - n_streams separate ResNet3DEncoder branches (one per timepoint/stream)
+      - stack outputs into a sequence (B, T, out_dim)
+      - LSTM over time -> final summary vector
+      - small head -> (B, out_dim_final)
+
+    Expected input:
+      xs: list length n_streams, each tensor shaped (B, 1, D, H, W)
+    """
+
+    def __init__(
+        self,
+        n_streams: int,
+        emb_dim: int = 128,
+        fusion: str = "lstm",          # kept for compatibility; you can ignore
+        out_dim: int = 64,             # each ResNet3DEncoder output dim
+        pretrained: bool = False,
+
+        # ---- LSTM config
+        lstm_hidden: int = 128,
+        lstm_layers: int = 1,
+        bidirectional: bool = False,
+        lstm_dropout: float = 0.0,     # only used if lstm_layers > 1
+
+        # ---- pooling over time after LSTM
+        pool: str = "last",            # "last" | "mean"
+
+        # ---- final projection
+        out_dim_final: int = 64,
+    ):
+        super().__init__()
+
+        self.n_streams = n_streams
+        self.pool = pool
+
+        # 1) Independent per-stream encoders (as you requested)
+        self.encoders = nn.ModuleList(
+            [
+                ResNet3DEncoder(
+                    in_channels=1,
+                    emb_dim=emb_dim,
+                    out_dim=out_dim,
+                    use_stages=(True, False, False, False),
+                    conv_overrides=[
+                        {
+                            "pattern": r"^layer1\.\d+\.conv1$",
+                            "kernel_size": (3, 3, 3),
+                            "padding": auto_padding((3, 3, 3)),
+                        },
+                        {
+                            "pattern": r"^layer1\.\d+\.conv2$",
+                            "kernel_size": (3, 3, 3),
+                            "padding": auto_padding((3, 3, 3)),
+                        },
+                    ],
+                    pretrained=pretrained,
+                )
+                for _ in range(n_streams)
+            ]
+        )
+
+        # 2) LSTM over the per-stream feature sequence
+        self.lstm = nn.LSTM(
+            input_size=out_dim,
+            hidden_size=lstm_hidden,
+            num_layers=lstm_layers,
+            batch_first=True,
+            dropout=(lstm_dropout if lstm_layers > 1 else 0.0),
+            bidirectional=bidirectional,
+        )
+
+        lstm_out_dim = lstm_hidden * (2 if bidirectional else 1)
+
+        # 3) Final head
+        self.fuse = nn.Sequential(
+            nn.LayerNorm(lstm_out_dim),
+            nn.Linear(lstm_out_dim, out_dim_final),
+            nn.ReLU(),
+        )
+
+    def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
+        """
+        xs: list length n_streams of (B,1,D,H,W)
+        returns: (B, out_dim_final)
+        """
+        assert len(xs) == len(self.encoders), f"Expected {len(self.encoders)} streams, got {len(xs)}"
+
+        # Encode each stream -> list of (B, out_dim)
+        zs = [enc(x) for enc, x in zip(self.encoders, xs, strict=False)]
+        # Stack into time sequence: (B, T, out_dim)
+        seq = torch.stack(zs, dim=1)
+        # LSTM
+        out, _ = self.lstm(seq)  # out: (B, T, lstm_out_dim)
+        # Pool over time
+        if self.pool == "mean":
+            pooled = out.mean(dim=1)   # (B, lstm_out_dim)
+        else:
+            pooled = out[:, -1, :]     # (B, lstm_out_dim)
+
+        return self.fuse(pooled)
+
+class LateFusion4DResNet_TemporalConv(nn.Module):
+    """
+    n_streams ResNet3D branches -> (B,T,C) -> temporal Conv1d (mixing channels) -> head
+    """
+    def __init__(
+        self,
+        n_streams: int,
+        emb_dim: int = 128,
+        out_dim: int = 64,            # per-branch output channels C
+        pretrained: bool = False,
+
+        # temporal conv config
+        kernel_size: int = 5,
+        n_blocks: int = 3,
+        hidden_channels: int = 128,
+        dilation_growth: int = 2,
+        attention_projection: bool = False,
+        attn_heads: int = 2,
+
+        pool: str = "mean",
+        out_dim_final: int = 64,
+    ):
+        super().__init__()
+        self.pool = pool
+        self.attention_projection = attention_projection
+        self.attn_heads = attn_heads
+
+        self.encoders = nn.ModuleList(
+            [
+                ResNet3DEncoder(
+                    in_channels=1,
+                    emb_dim=emb_dim,
+                    out_dim=out_dim,
+                    use_stages=(True, False, False, False),
+                    conv_overrides=[
+                        {"pattern": r"^layer1\.\d+\.conv1$", "kernel_size": (3,3,3), "padding": auto_padding((3,3,3))},
+                        {"pattern": r"^layer1\.\d+\.conv2$", "kernel_size": (3,3,3), "padding": auto_padding((3,3,3))},
+                    ],
+                    pretrained=pretrained,
+                )
+                for _ in range(n_streams)
+            ]
+        )
+
+        layers = []
+        dilation = 1
+
+        in_ch = out_dim
+        for _ in range(n_blocks):
+            pad = (kernel_size // 2) * dilation
+            layers += [
+                nn.Conv1d(in_ch, hidden_channels, kernel_size=kernel_size, padding=pad, dilation=dilation, bias=False),
+                nn.BatchNorm1d(hidden_channels),
+                nn.GELU(),
+            ]
+            in_ch = hidden_channels
+            dilation *= dilation_growth
+
+        self.temporal = nn.Sequential(*layers)
+
+        if self.attention_projection is True:
+                self.pre_norm = nn.LayerNorm(hidden_channels)  # before attention
+                self.head = nn.MultiheadAttention(
+                    embed_dim=hidden_channels, num_heads=self.attn_heads, batch_first=True
+                )
+                self.norm = nn.Sequential(
+                    nn.LayerNorm(hidden_channels),
+                    nn.Linear(hidden_channels, out_dim_final),
+                )
+        else:
+            self.head = nn.Sequential(
+                  nn.LayerNorm(hidden_channels),
+                  nn.Linear(hidden_channels, out_dim_final),
+            )
+
+    def forward(self, xs: list[torch.Tensor]) -> torch.Tensor:
+        # assert len(xs) == len(self.encoders), f"Expected {len(self.encoders)} streams, got {len(xs)}"
+
+        zs = [enc(x) for enc, x in zip(self.encoders, xs, strict=False)]  # list (B,C)
+        seq = torch.stack(zs, dim=1)                                      # (B,T,C)
+
+        y = seq.transpose(1, 2)                                           # (B,C,T)
+        y = self.temporal(y)                                              # (B,hidden,T)
+
+        if self.pool == "mean":
+            pooled = y.mean(dim=2)                                        # (B,hidden)
+        else:
+            pooled = y[:, :, -1]                                          # (B,hidden)
+
+        if self.attention_projection is True:
+            # define here the residual connection as expection
+            y = self.pre_norm(pooled)
+            y0, _ = self.head(y, y, y)
+            o = self.norm(y0 + y)
+        else:
+            o = self.head(pooled)
+
+        return o
+
 if __name__ == "__main__":
     """
        ** Main section of the code here ** RUN THESE AS EXAMPLES**

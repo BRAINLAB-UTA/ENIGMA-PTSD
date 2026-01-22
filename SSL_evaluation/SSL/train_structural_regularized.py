@@ -429,7 +429,7 @@ if __name__ == "__main__":
            dilation_growth=2,
            attention_projection=True,
            attn_heads=1,
-           pool= "concat", #"mean", # remember to change it back
+           pool="mean",
            out_dim_final=out_dim,
        )
 

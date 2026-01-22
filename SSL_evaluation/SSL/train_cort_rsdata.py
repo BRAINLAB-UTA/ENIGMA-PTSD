@@ -100,7 +100,7 @@ from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_i
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # import the utils function from tehe utils module
-from utils import ( load_latest_ckpt,
+from utils import ( load_latest_ckpt_cort,
                     read_metric_txt,
                     plotting_twinx_variables,
                     to_np,
@@ -428,7 +428,7 @@ if __name__ == "__main__":
            dilation_growth=2,
            attention_projection=True,
            attn_heads=1,
-           pool="concat",
+           pool= "mean", ##"concat", # remember to change it back
            out_dim_final=out_dim,
        )
 
@@ -444,7 +444,7 @@ if __name__ == "__main__":
 
     # validates this first!!
     if os.path.exists(model_path) and os.listdir(model_path):
-       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_thick, optimizer_SSL, scheduler_SSL)
+       start_iter, _ = load_latest_ckpt_cort(model_path, device, enc_4D_rsdata, enc_thick, optimizer_SSL, scheduler_SSL)
        MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
        SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
        WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")

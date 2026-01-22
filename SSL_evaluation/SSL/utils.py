@@ -5,6 +5,15 @@
 """
 import sys
 import os
+import warnings
+
+# To ignore all warnings:
+warnings.filterwarnings("ignore")
+# To ignore specific categories of warnings (e.g., DeprecationWarning):
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # or "1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import torch
 import torch.nn as nn
@@ -35,22 +44,30 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 # function for loading the latest checkpoint generated
-def load_latest_ckpt(
+def load_latest_ckpt_cort(
     ckpt_dir: str,
     device: torch.device,
     enc_4D_rsdata,
     enc_thick,
     optimizer_SSL=None,
     scheduler_SSL=None,
+    ckpt_iter=None
 ):
     ckpt_dir = Path(ckpt_dir)
-    ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
+
+    if ckpt_iter is None:
+       ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
+    else:
+       ckpt_files = sorted([p for p in ckpt_dir.glob("*.pth") if str(ckpt_iter) in p.name], key=lambda p: p.stat().st_mtime)
 
     if len(ckpt_files) == 0:
         raise FileNotFoundError(f"No checkpoint files found in: {ckpt_dir}")
 
     latest = ckpt_files[-1]
-    logger.info(f"Loading latest checkpoint as {latest}")
+    if ckpt_iter is None:
+       logger.info(f"Loading latest checkpoint as {latest}")
+    else:
+       logger.info(f"Loading selected checkpoint as {latest}")
 
     ckpt = torch.load(latest, map_location=device)
 
@@ -69,6 +86,93 @@ def load_latest_ckpt(
 
     return start_iter, str(latest)
 
+# function for loading the latest checkpoint generated
+def load_latest_ckpt_struct(
+    ckpt_dir: str,
+    device: torch.device,
+    enc_surf,
+    enc_thick,
+    enc_vol,
+    optimizer_SSL=None,
+    scheduler_SSL=None,
+    ckpt_iter=None
+):
+    ckpt_dir = Path(ckpt_dir)
+
+    if ckpt_iter is None:
+       ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
+    else:
+       ckpt_files = sorted([p for p in ckpt_dir.glob("*.pth") if str(ckpt_iter) in p.name], key=lambda p: p.stat().st_mtime)
+
+    if len(ckpt_files) == 0:
+        raise FileNotFoundError(f"No checkpoint files found in: {ckpt_dir}")
+
+    latest = ckpt_files[-1]
+    if ckpt_iter is None:
+       logger.info(f"Loading latest checkpoint as {latest}")
+    else:
+       logger.info(f"Loading selected checkpoint as {latest}")
+
+    ckpt = torch.load(latest, map_location=device)
+
+    # ---- models loading process here
+    enc_vol.load_state_dict(ckpt["models"]["enc_vol"], strict=True)
+    enc_thick.load_state_dict(ckpt["models"]["enc_thick"], strict=True)
+    enc_surf.load_state_dict(ckpt["models"]["enc_surf"], strict=True)
+
+    # ---- optimizer / scheduler loading - necessary for replication
+    if optimizer_SSL is not None and "optimizer_SSL" in ckpt:
+        optimizer_SSL.load_state_dict(ckpt["optimizer_SSL"])
+
+    if scheduler_SSL is not None and "scheduler_SSL" in ckpt:
+        scheduler_SSL.load_state_dict(ckpt["scheduler_SSL"])
+
+    start_iter = int(ckpt.get("iter", 0)) + 1
+
+    return start_iter, str(latest)
+
+def load_latest_ckpt_4_mod(
+    ckpt_dir: str,
+    device: torch.device,
+    enc_4D_rsdata,
+    enc_alff,
+    enc_falff,
+    enc_reho,
+    optimizer_SSL=None,
+    scheduler_SSL=None,
+    ckpt_iter=None
+):
+    ckpt_dir = Path(ckpt_dir)
+
+    if ckpt_iter is None:
+       ckpt_files = sorted(ckpt_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime)
+    else:
+       ckpt_files = sorted([p for p in ckpt_dir.glob("*.pth") if str(ckpt_iter) in p.name], key=lambda p: p.stat().st_mtime)
+
+    if len(ckpt_files) == 0:
+        raise FileNotFoundError(f"No checkpoint files found in: {ckpt_dir}")
+
+    latest = ckpt_files[-1]
+    logger.info(f"Loading latest checkpoint as {latest}")
+
+    ckpt = torch.load(latest, map_location=device)
+
+    # ---- models loading process here
+    enc_4D_rsdata.load_state_dict(ckpt["models"]["enc_4D_rsdata"], strict=True)
+    enc_alff.load_state_dict(ckpt["models"]["enc_alff"], strict=True)
+    enc_falff.load_state_dict(ckpt["models"]["enc_falff"], strict=True)
+    enc_reho.load_state_dict(ckpt["models"]["enc_reho"], strict=True)
+
+    # ---- optimizer / scheduler loading - necessary for replication
+    if optimizer_SSL is not None and "optimizer_SSL" in ckpt:
+        optimizer_SSL.load_state_dict(ckpt["optimizer_SSL"])
+
+    if scheduler_SSL is not None and "scheduler_SSL" in ckpt:
+        scheduler_SSL.load_state_dict(ckpt["scheduler_SSL"])
+
+    start_iter = int(ckpt.get("iter", 0)) + 1
+
+    return start_iter, str(latest)
 
 # function for reading the interim text files
 def read_metric_txt(path_str: str):
@@ -201,6 +305,14 @@ def make_subject_palette(subject_ids, palette_name="tab20"):
     colors = sns.color_palette(palette_name, n_colors=len(uniq))
     return {sid: col for sid, col in zip(uniq, colors)}
 
+
+def make_site_palette(site_names, palette_name="tab20"):
+    """
+    Create a deterministic site->color mapping (sorted by site name).
+    """
+    uniq = sorted(set(site_names))  # alphabetical order
+    colors = sns.color_palette(palette_name, n_colors=len(uniq))
+    return dict(zip(uniq, colors))
 
 
 # initialization function here

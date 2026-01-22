@@ -101,7 +101,7 @@ from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LS
 from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
 
 # import the utils function from tehe utils module
-from utils import ( load_latest_ckpt,
+from utils import ( load_latest_ckpt_4_mod,
                     read_metric_txt,
                     plotting_twinx_variables,
                     to_np,
@@ -426,12 +426,12 @@ if __name__ == "__main__":
            out_dim=out_dim,            # per-branch output channels C
            pretrained=False,
            kernel_size=5,
-           n_blocks=3,
+           n_blocks=4,
            hidden_channels=100,
            dilation_growth=2,
            attention_projection=True,
            attn_heads=1,
-           pool="concat",
+           pool="mean",
            out_dim_final=out_dim,
        )
 
@@ -447,7 +447,7 @@ if __name__ == "__main__":
 
     # validates this first!!
     if os.path.exists(model_path) and os.listdir(model_path):
-       start_iter, _ = load_latest_ckpt(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
+       start_iter, _ = load_latest_ckpt_4_mod(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
        MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
        SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
        WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
@@ -477,7 +477,7 @@ if __name__ == "__main__":
         rs_time_window=200,
         rs_window_crop=time_samples,
         verbose=False,
-        shuffle=False
+        shuffling=False
     )
 
     #data_loader_ENIGMA_eval = define_dataset_dataloader_ENIGMA(

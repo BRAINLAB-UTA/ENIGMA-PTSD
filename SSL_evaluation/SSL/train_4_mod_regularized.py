@@ -48,8 +48,12 @@ forward-pass loop over the ENIGMA multimodal dataloader to validate:
        selector of RS_encoder 0: ResNet with Fusion, 1: ResNet with LSTM
      argv[8]
        constant temperature of SSL optimization - InfoNCE loss (contrastive)
+     argv[9]
+       lambda_site: regularization rate for the site penalty
+     argv[10]
+       lambda_age: regularization rate for the site penalty
 
- call it like this: python train_structural_rsdata.py 66 100 10 1e-4 1 128 1 0.07
+ call it like this: python train_4_mod_regularized.py 66 100 10 1e-4 1 128 1 0.07 0.5 0.2
 
  Outputs:
     - Logs (via loguru) indicating successful reads and embedding computation.
@@ -97,8 +101,11 @@ from dataset_dataloder.ENIGMA_dataset_dataloder_creation_small import define_dat
 # get the model definitions here***
 from ResNet_Encoders_definition import LateFusion4DResNet, LateFusion4DResNet_LSTM, ResNet3DEncoder, LateFusion4DResNet_TemporalConv
 
+# import losses for SSL and alternative regularization
+from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole, orthogonality_penalty
+
 # import the utils function from tehe utils module
-from utils import ( load_latest_ckpt_struct,
+from utils import ( load_latest_ckpt_4_mod,
                     read_metric_txt,
                     plotting_twinx_variables,
                     to_np,
@@ -112,11 +119,12 @@ from utils import ( load_latest_ckpt_struct,
                     auto_padding
                   )
 
-# import losses for SSL and alternative regularization
-from losses_SSL import multimodal_pairwise_clip_loss, multimodal_multipositive_infonce_whole
-
 # define the device here
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+sites_ALL = ["AMC", "Beijing", "Capetown", "Duke", "Emory", "Ghent", "Groningen", "Grupe", "Lawson", "Masaryk", "Mclean", "Milwaukee", "MinnVA", "Muenster", "NanjingYixing", "Toledo", "Tours", "UWash", "Vanderbilt", "WacoVA"]
+site_to_id = {site: i for i, site in enumerate(sites_ALL)}
+num_sites = len(sites_ALL)
 
 # set the seeds initialization here
 seed = 42
@@ -130,25 +138,27 @@ if torch.cuda.is_available():
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-def get_concat_embedding(st_DATA,
-                        enc_vol, enc_surf, enc_thick, batch_sizes):
+
+def get_concat_embedding(rs_DATA, falff_reho_DATA,
+                        enc_alff, enc_falff, enc_reho,
+                        enc_4D_rsdata, batch_sizes):
     """
       get all the embeddings from each iteration here
       project all the data with the models trained after that
     """
-    # out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
-    # out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
-    # out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-    out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
-    out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-    out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
+    out_alff  = enc_alff(falff_reho_DATA[0].unsqueeze(1))
+    out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
+    out_reho  = enc_reho(falff_reho_DATA[2].unsqueeze(1))
+    # out_surf  = enc_surf(st_DATA[0].unsqueeze(1))
+    # out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+    # out_vol   = enc_vol(st_DATA[2].unsqueeze(1))
 
-    #rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
-    #RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
-    #out_rs = enc_4D_rsdata(RSDATA)
+    rs_ = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)  # (B,T,1,D,H,W)
+    RSDATA = [rs_[:, t] for t in range(rs_.shape[1])]
+    out_rs = enc_4D_rsdata(RSDATA)
 
     embeds_all = {
-        "vol": out_vol, "surf": out_surf, "thick": out_thick
+        "alff": out_alff, "falff": out_falff, "reho": out_reho, "rs": out_rs
     }
     embeds_all = {k: F.normalize(v, dim=1) for k, v in embeds_all.items()}
 
@@ -159,7 +169,7 @@ def get_concat_embedding(st_DATA,
 
     X_all, mod_labels, mod_keys = stack_modalities(embeds_np)
 
-    val_clust = np.tile(np.arange(batch_sizes), 3)
+    val_clust = np.tile(np.arange(batch_sizes), 4)
 
     if len(val_clust) > 1:
        sil_mod = compute_silhouette(X_all, val_clust, metric="cosine")
@@ -168,7 +178,7 @@ def get_concat_embedding(st_DATA,
        sil_mod = np.nan
        nmi_mod = np.nan
 
-    z = torch.cat([embeds_all[k] for k in ["vol","surf","thick"]], dim=1)
+    z = torch.cat([embeds_all[k] for k in ["alff","falff","reho","rs"]], dim=1)
     return z, wd, sil_mod, nmi_mod, embeds_all
 
 ## get the UMAP and tSNE projections here..
@@ -181,7 +191,7 @@ def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
     # take into account these values are concat projections of ndim values
     # reshape here the input values here
     Z_stacked = np.vstack(Z)
-    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 3, ndim)
+    Z_reshaped = Z_stacked.reshape(Z_stacked.shape[0], 4, ndim)
     Z_final = Z_reshaped.reshape(-1, ndim)
     umap_proj = umap_map.fit_transform(Z_final)
 
@@ -205,7 +215,7 @@ def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modali
     None
     """
 
-    markers=["v", "P", "^"]
+    markers=["o", "X", "s", "D"]
     plt.figure(figsize=(12, 10))
     sns.scatterplot(x=proj_feat[:, 0], y=proj_feat[:, 1], hue=sub_labels, hue_order=subject_order, style=modalities, markers=markers, palette=subject_palette, s=180, edgecolor="k", alpha=0.7, legend=False)
     plt.title(title)
@@ -231,9 +241,11 @@ if __name__ == "__main__":
     out_dim = int(sys.argv[6])
     rs_data_model_sel = int(sys.argv[7])
     temperature = float(sys.argv[8])
+    lambda_site = float(sys.argv[9])
+    lambda_age = float(sys.argv[10])
 
-    model_path = f"./models/folder_4_struct_only_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
-    vis_path = f"./visualization/folder_4_struct_only_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}"
+    model_path = f"./models/folder_4_reg_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}_{lambda_site}_{lambda_age}"
+    vis_path = f"./visualization/folder_4_reg_{iterations}_{batch_size}_{learning_rate}_{loss_selector}_{out_dim}_{rs_data_model_sel}_{temperature}_{lambda_site}_{lambda_age}"
 
 
     # Define here the models and plot folders for interim results visualization
@@ -424,28 +436,30 @@ if __name__ == "__main__":
            out_dim=out_dim,            # per-branch output channels C
            pretrained=False,
            kernel_size=5,
-           n_blocks=3,
+           n_blocks=4,
            hidden_channels=100,
            dilation_growth=2,
            attention_projection=True,
            attn_heads=1,
-           pool= "concat", #"mean", # remember to change it back
+           pool="mean",
            out_dim_final=out_dim,
        )
 
     # initialize weights models
-    for model in [enc_vol, enc_surf, enc_thick]:
+    for model in [enc_4D_rsdata, enc_alff, enc_falff, enc_reho]:
         model.to(device)
         model.apply(lambda m: init_xavier(m, uniform=True))
 
 
+    age_thr = 21 # *** define this as age_thrfor setting up the age one-hot logits for the orthogonal penalty
+
     # define the optimizer here
-    optimizer_SSL = torch.optim.AdamW(list(enc_vol.parameters()) + list(enc_surf.parameters()) + list(enc_thick.parameters()), lr=learning_rate)
+    optimizer_SSL = torch.optim.AdamW(list(enc_4D_rsdata.parameters()) + list(enc_alff.parameters()) + list(enc_falff.parameters()) + list(enc_reho.parameters()), lr=learning_rate)
     scheduler_SSL = CosineAnnealingLR(optimizer_SSL, T_max=iterations, eta_min=1e-5)
 
     # validates this first!!
     if os.path.exists(model_path) and os.listdir(model_path):
-       start_iter, _ = load_latest_ckpt_struct(model_path, device, enc_surf, enc_thick, enc_vol, optimizer_SSL, scheduler_SSL)
+       start_iter, _ = load_latest_ckpt_4_mod(model_path, device, enc_4D_rsdata, enc_alff, enc_falff, enc_reho, optimizer_SSL, scheduler_SSL)
        MI_vals = read_metric_txt(f"{model_path}/mutual_information_interim.txt")
        SIL_vals = read_metric_txt(f"{model_path}/silhoutte_interim.txt")
        WD_vals = read_metric_txt(f"{model_path}/wasserstein_distance_interim.txt")
@@ -462,10 +476,10 @@ if __name__ == "__main__":
     logger.info("All encoders has been defined!!")
 
     # set the models in train mode
-    # enc_4D_rsdata.train()
-    enc_vol.train()
-    enc_surf.train()
-    enc_thick.train()
+    enc_4D_rsdata.train()
+    enc_alff.train()
+    enc_falff.train()
+    enc_reho.train()
 
     # GET HERE THE DATALODERS WITH THE PROJECTED IMAGES AND DIFFERENT MODALITIES - TAKING INTO ACCOUNT 21 DIFFERENT PAIRS
     # read the dataloder object here. Take 200s for all the trials/subjects here
@@ -479,12 +493,12 @@ if __name__ == "__main__":
     )
 
     #data_loader_ENIGMA_eval = define_dataset_dataloader_ENIGMA(
-    #     subject_indices_current_data=subject_indices_current_data,
-    #     batch_size=batch_size,
-    #     rs_time_window=200,
-    #     rs_window_crop=time_samples,
-    #     verbose=False,
-    #     shuffling=False
+    #    subject_indices_current_data=subject_indices_current_data,
+    #    batch_size=batch_size,
+    #    rs_time_window=200,
+    #    rs_window_crop=time_samples,
+    #    verbose=False,
+    #    shuffling=False
     #)
 
     # define the modalities here
@@ -533,21 +547,22 @@ if __name__ == "__main__":
             falff_reho_DATA = [d.to(device, non_blocking=True) for d in falff_reho_DATA]
 
             # get the inputs on each modality and get the embeddings
-            #out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
-            #out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
-            #out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
-            out_surf = enc_surf(st_DATA[0].unsqueeze(1))
-            out_thick = enc_thick(st_DATA[1].unsqueeze(1))
-            out_vol = enc_vol(st_DATA[2].unsqueeze(1))
+            out_alff = enc_alff(falff_reho_DATA[0].unsqueeze(1))
+            out_falff = enc_falff(falff_reho_DATA[1].unsqueeze(1))
+            out_reho = enc_reho(falff_reho_DATA[2].unsqueeze(1))
+            #out_surf = enc_surf(st_DATA[0].unsqueeze(1))
+            #out_thick = enc_thick(st_DATA[1].unsqueeze(1))
+            #out_vol = enc_vol(st_DATA[2].unsqueeze(1))
             # create the list of tensor the 4D image timesamples. Do this permutation before transforming the tensor to a list of tensors!!
-            #rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
-            #RSDATA = [rs_DATA[:, t] for t in range(rs_DATA.shape[1])]
-            #out_rsdata = enc_4D_rsdata(RSDATA)
+            rs_DATA = rs_DATA.permute(0, 4, 1, 2, 3).unsqueeze(2)
+            RSDATA = [rs_DATA[:, t] for t in range(rs_DATA.shape[1])]
+            out_rsdata = enc_4D_rsdata(RSDATA)
 
             embeds_all = {
-              "vol":  out_vol,    # (B,D)
-              "surf": out_surf,   # (B,D)
-              "thick":  out_thick,    # (B,D)
+              "alff":  out_alff,    # (B,D)
+              "falff": out_falff,   # (B,D)
+              "reho":  out_reho,    # (B,D)
+              "rs":    out_rsdata,  # (B,D)
             }
 
             # normalize the embeddings here to make it easier map in the l2-sphere later..
@@ -559,11 +574,28 @@ if __name__ == "__main__":
             else:
                loss_SSL = multimodal_multipositive_infonce_whole(embeds=embeds_all, temperature=temperature)
 
-            loss_interim.append(loss_SSL)
+            Z_fused = torch.stack(list(embeds_all.values()), dim=0).mean(dim=0)
+
+            # get the site_ids and age thresholding for one-hot matrix creation - subsequent orthogonal penalty**
+            site_ids = torch.tensor(
+               [site_to_id[s] for s in sites_idx],
+               dtype=torch.long,
+               device=device
+            )
+
+            age_values = (age >= age_thr).long()
+
+            loss_site = orthogonality_penalty(Z_fused, site_ids, n_domain=num_sites)
+            loss_age  = orthogonality_penalty(Z_fused, age_values,  n_domain=2)
+
+            # get the composite loss here for full regularization
+            loss_total = loss_SSL + lambda_site * loss_site + lambda_age * loss_age
+
+            loss_interim.append(loss_total)
 
             # do the loss backwards and the zero grad update
             optimizer_SSL.zero_grad()
-            loss_SSL.backward()
+            loss_total.backward()
             optimizer_SSL.step()
             scheduler_SSL.step()
 
@@ -582,7 +614,7 @@ if __name__ == "__main__":
         mean_loss_value = mean_loss.item()
         logger.info(f"Training iteration {iter} with loss: {mean_loss_value}..")
 
-        models = [enc_vol, enc_surf, enc_thick]
+        models = [enc_4D_rsdata, enc_alff, enc_falff, enc_reho] # enc_vol, enc_surf, enc_thick]
         # processing the projected embeddings in eval mode
         # ---- END OF EPOCH: EMBEDDING SNAPSHOT IN EVAL MODE ----
         # (optional: only every few epochs)
@@ -607,15 +639,16 @@ if __name__ == "__main__":
 
                    # read all the batches again to project the embeddings in eval mode**
                    (idx_eval, rs_DATA_eval, st_DATA_eval, falff_reho_DATA_eval, subject_index_eval, sites_idx_eval,
-                   sampling_index_eval, time_subject_eval, TRs_eval, age_eval) = batch_data_eval
+                   sampling_index_eval, time_subject_eval, TRs_eval, age_val) = batch_data_eval
 
                    rs_DATA_eval = rs_DATA_eval.to(device, non_blocking=True)
-                   st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
-                   # falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
+                   # st_DATA_eval = [d.to(device, non_blocking=True) for d in st_DATA_eval]
+                   falff_reho_DATA_eval = [d.to(device, non_blocking=True) for d in falff_reho_DATA_eval]
 
                    z, wd, sil, nmi, _ = get_concat_embedding(
-                      st_DATA_eval,
-                      enc_vol, enc_surf, enc_thick, len(idx_eval)
+                      rs_DATA_eval, falff_reho_DATA_eval,
+                      enc_alff, enc_falff, enc_reho,
+                      enc_4D_rsdata, len(idx_eval)
                    )
 
                    Z_vals.append(z.detach().cpu().numpy())
@@ -628,10 +661,10 @@ if __name__ == "__main__":
 
            # get UMAP and t-SNE projections
            umap_projections = get_UMAP_tSNE_projections(Z=Z_vals, proj_components=2, ndim=out_dim)
-           modality_ids = np.tile(np.arange(3), np.vstack(Z_vals).shape[0])
+           modality_ids = np.tile(np.arange(4), np.vstack(Z_vals).shape[0])
            subs_evals = [str(s) for sublist in subs_evals for s in sublist]
            subs_evals = np.array(subs_evals)  # convert list → array
-           subs_evals_long = np.repeat(subs_evals, 3)
+           subs_evals_long = np.repeat(subs_evals, 4)
 
            MI_vals.append(np.nanmean(np.array(mi_vals)))
            SIL_vals.append(np.nanmean(np.array(sil_vals)))
@@ -675,9 +708,10 @@ if __name__ == "__main__":
            ckpt = {
                 "iter": iter,
                 "models": {
-                   "enc_vol": enc_vol.state_dict(),
-                   "enc_surf": enc_surf.state_dict(),
-                   "enc_thick": enc_thick.state_dict(),
+                   "enc_4D_rsdata": enc_4D_rsdata.state_dict(),
+                   "enc_alff": enc_alff.state_dict(),
+                   "enc_falff": enc_falff.state_dict(),
+                   "enc_reho": enc_reho.state_dict(),
                 },
                 "optimizer_SSL": optimizer_SSL.state_dict(),
                 "scheduler_SSL": scheduler_SSL.state_dict(),
