@@ -112,8 +112,17 @@ def get_UMAP_tSNE_projections(Z, proj_components:int=2, ndim:int=128):
 
     return umap_proj
 
-# plot the projections here
-def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modalities, title: str, epoch: str, suffix: str, folder_name: str):
+def plot_proj_feat(
+        proj_feat,
+        sub_labels,
+        subject_order,
+        subject_palette,
+        modalities,
+        title: str,
+        epoch: str,
+        suffix: str,
+        folder_name: str,
+        legend:bool=False):
     """
     Scatter-plot 2D t-SNE embeddings and save to disk.
 
@@ -130,11 +139,48 @@ def plot_proj_feat(proj_feat, sub_labels, subject_order, subject_palette, modali
     None
     """
 
+    if legend is True:
+       indicator_legend = "brief"
+    else:
+       indicator_legend = False
     markers=["o", "X", "s", "D"]
     plt.figure(figsize=(12, 10))
-    sns.scatterplot(x=proj_feat[:, 0], y=proj_feat[:, 1], hue=sub_labels, hue_order=subject_order, style=modalities, markers=markers, palette=subject_palette, s=180, edgecolor="k", alpha=0.7, legend=False)
+    sns.scatterplot(x=proj_feat[:,
+                                0],
+                    y=proj_feat[:,
+                                1],
+                    hue=sub_labels,
+                    hue_order=subject_order,
+                    style=modalities,
+                    markers=markers,
+                    palette=subject_palette,
+                    s=180,
+                    edgecolor="k",
+                    alpha=0.7,
+                    legend=indicator_legend
+    )
+
+    # filters the markers here
+    ax = plt.gca()
+
+    handles, labels = ax.get_legend_handles_labels()
+
+    # Keep only subject labels (hue), remove modality labels
+    subject_labels = [str(s) for s in subject_order]
+
+    filtered = [
+       (h, l) for h, l in zip(handles, labels)
+       if l in subject_labels
+    ]
+
+    if legend is True:
+       ax.legend(
+           *zip(*filtered),
+           bbox_to_anchor=(1.05, 1),
+           loc="upper left"
+       )
+
     plt.title(title)
-    # plt.legend(title=class_value, bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.tight_layout()
     plt.grid(True)
     plt.savefig(f"{folder_name}/{suffix}_iter_{epoch}.jpg")
